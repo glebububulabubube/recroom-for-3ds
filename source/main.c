@@ -24,6 +24,17 @@ typedef struct { Vec3 p; Vec3 c; float size; bool heldL, heldR; } Box;
 #define FLOOR_Y   -1.0f
 #define CEIL_Y     3.0f
 
+C2D_Target* top;
+C2D_Target* bottom;
+
+// Forward declarations so nothing is ever implicitly declared (avoids int* type bugs)
+static bool project(const Vec3* w, float* sx, float* sy, float* depth);
+static void drawSky(C2D_Target* t);
+static void drawBox(C2D_Target* t, Box* b);
+static void drawHand(C2D_Target* t, const Vec3* h, bool active);
+static Box* nearestTo(const Vec3* handWorld, float maxDist);
+static void doGrab(bool left, bool* grabFlag, const Vec3* handRel);
+
 static Box boxes[MAX_BOXES];
 static int boxCount = 0;
 
@@ -67,11 +78,13 @@ static bool project(const Vec3* w, float* sx, float* sy, float* depth){
     return true;
 }
 
-static void drawSky(C2D_Target* top){
+static void drawSky(C2D_Target* t){
+    (void)t;
     C2D_DrawRectSolid(0,0,0,SCR_WIDTH,SCR_HEIGHT, C2D_Color32(90,150,220,255));
 }
 
-static void drawBox(C2D_Target* top, Box* b){
+static void drawBox(C2D_Target* t, Box* b){
+    (void)t;
     Vec3 min={b->p.x-b->size/2,b->p.y-b->size/2,b->p.z-b->size/2};
     Vec3 max={b->p.x+b->size/2,b->p.y+b->size/2,b->p.z+b->size/2};
     float sx0,sy0,sz0,sx1,sy1,sz1;
@@ -89,7 +102,8 @@ static void drawBox(C2D_Target* top, Box* b){
     C2D_DrawRectSolid(x0,y1-h,0.51f,x1-x0,h,dark);
 }
 
-static void drawHand(C2D_Target* top, const Vec3* h, bool active){
+static void drawHand(C2D_Target* t, const Vec3* h, bool active){
+    (void)t;
     Vec3 w={cam.x+h->x, cam.y+h->y, cam.z+h->z};
     float sx,sy,dz; if(!project(&w,&sx,&sy,&dz)) return;
     float r=10.0f/(dz*0.18f); r=clampf(r,5,16);
@@ -109,7 +123,7 @@ static Box* nearestTo(const Vec3* handWorld, float maxDist){
     return best;
 }
 
-static void doGrab(C2D_Target* bottom, bool left, bool* grabFlag, const Vec3* handRel){
+static void doGrab(bool left, bool* grabFlag, const Vec3* handRel){
     Vec3 hw={cam.x+handRel->x, cam.y+handRel->y, cam.z+handRel->z};
     if(*grabFlag){
         *grabFlag=false;
@@ -125,8 +139,8 @@ int main(void){
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
-    C2D_Target* top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
-    C2D_Target* bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
+    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
     initWorld();
 
@@ -171,7 +185,7 @@ int main(void){
             handL.x=clampf(handL.x,-1.5f,1.5f);
             handL.y=clampf(handL.y,-1.2f,1.2f);
             handL.z=clampf(handL.z,0.3f,3.0f);
-            if(kDown&KEY_X) doGrab(bottom,true,&grabL,&handL);
+            if(kDown&KEY_X) doGrab(true,&grabL,&handL);
         }
         if(rHandMode){
             float dx=-(float)cp.dx/90.0f, dy=-(float)cp.dy/90.0f;
@@ -183,7 +197,7 @@ int main(void){
             handR.x=clampf(handR.x,-1.5f,1.5f);
             handR.y=clampf(handR.y,-1.2f,1.2f);
             handR.z=clampf(handR.z,0.3f,3.0f);
-            if(kDown&KEY_X) doGrab(bottom,false,&grabR,&handR);
+            if(kDown&KEY_X) doGrab(false,&grabR,&handR);
         }
 
         // attach held boxes to hands
