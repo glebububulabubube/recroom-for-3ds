@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup devkitPro (pacman)
+        run: |
+          sudo dkp-pacman-key --init 2>/dev/null || true
+          (dkp-pacman -Syu --noconfirm) || true
+          dkp-pacman -S --noconfirm 3ds-dev
+        shell: bash
+        env:
+          TERM: dumb
+
+      - name: Build
+        run: make -j$(nproc)
+        shell: bash
+
+      - name: Upload 3DSX
+        uses: actions/upload-artifact@v4
+        with:
+          name: recroom3ds-3dsx
+          path: |
+            recroom3ds.3dsx
+            recroom3ds.smdh
+            recroom3ds.elf
+            recroom3ds.bin
+          if-no-files-found: warn
