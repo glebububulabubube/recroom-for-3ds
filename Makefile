@@ -167,7 +167,11 @@ endif
 
 #---------------------------------------------------------------------------------
 all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
-	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile $(TARGET).cia
+	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
+	@echo building .cia ...
+	@bannertool makebanner -o $(BUILD)/banner.bin -i $(TOPDIR)/banner.png
+	@bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(TOPDIR)/icon.png -o $(CURDIR)/$(TARGET).smdh
+	@makerom -f cia -o $(CURDIR)/$(TARGET).cia -elf $(BUILD)/$(TARGET).elf -banner $(BUILD)/banner.bin -icon $(CURDIR)/$(TARGET).smdh
 
 $(BUILD):
 	@mkdir -p $@
@@ -206,15 +210,6 @@ $(OUTPUT).3dsx	:	$(OUTPUT).elf $(_3DSXDEPS)
 $(OFILES_SOURCES) : $(HFILES)
 
 $(OUTPUT).elf	:	$(OFILES)
-
-#---------------------------------------------------------------------------------
-# .cia target via makerom (needs banner.png + icon.png)
-#---------------------------------------------------------------------------------
-$(OUTPUT).cia: $(OUTPUT).elf $(TOPDIR)/banner.png $(TOPDIR)/icon.png
-	@echo building .cia ...
-	@bannertool makebanner -o $(BUILD)/banner.bin -i $(TOPDIR)/banner.png
-	@bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(TOPDIR)/icon.png -o $(BUILD)/$(TARGET).smdh
-	@makerom -f cia -o $(OUTPUT).cia -elf $(OUTPUT).elf -banner $(BUILD)/banner.bin -icon $(BUILD)/$(TARGET).smdh
 
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data
