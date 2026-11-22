@@ -84,9 +84,10 @@ static int project(float x, float y, float z, float* sx, float* sy, float* czOut
     float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
     float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
 
-    float R[3] = { cY, 0.0f, -sY };
-    float U[3] = { sY*sP, -cP, cY*sP };
-    float F[3] = { sY*cP, sP, cY*cP };
+    // canonical camera basis: yaw around Y, pitch up positive, look along -Z at yaw=0
+    float R[3] = { cY, 0.0f, sY };
+    float F[3] = { sY*cP, sP, -cY*cP };
+    float U[3] = { -sY*sP, cP, cY*sP };
 
     float cx = rx*R[0] + ry*R[1] + rz*R[2];
     float cy = rx*U[0] + ry*U[1] + rz*U[2];
@@ -95,7 +96,7 @@ static int project(float x, float y, float z, float* sx, float* sy, float* czOut
     if(cz < 0.2f) return 0;
     float inv = FOCAL / cz;
     *sx = SCREEN_W/2.0f + cx*inv;
-    *sy = SCREEN_H/2.0f + cy*inv;
+    *sy = SCREEN_H/2.0f - cy*inv;
     if(czOut) *czOut = cz;
     return 1;
 }
@@ -235,9 +236,9 @@ static void updateHands(void)
 
     float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
     float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
-    float R[3] = { cY, 0.0f, -sY };
-    float U[3] = { sY*sP, -cP, cY*sP };
-    float F[3] = { sY*cP, sP, cY*cP };
+    float R[3] = { cY, 0.0f, sY };
+    float F[3] = { sY*cP, sP, -cY*cP };
+    float U[3] = { -sY*sP, cP, cY*sP };
 
     float px = cam.pos.x, py = cam.pos.y, pz = cam.pos.z;
 
@@ -332,7 +333,7 @@ static void updatePlayer(float dt)
         float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
         float speed = 5.0f * dt;
         cam.pos.x += (cY*dx + sY*dy) * speed;
-        cam.pos.z += (-sY*dx + cY*dy) * speed;
+        cam.pos.z += (-sY*dx - cY*dy) * speed;
     }
 
     // clamp inside room
