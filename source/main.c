@@ -17,10 +17,18 @@
 static char playerName[NAME_MAX + 1] = "";
 static C2D_TextBuf g_textBuf = NULL;
 
-static u32 clrOrange  = C2D_Color32(0xFF, 0x6B, 0x0F, 0xFF);
-static u32 clrOrangeD = C2D_Color32(0xE8, 0x5A, 0x00, 0xFF);
-static u32 clrWhite   = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF);
-static u32 clrGrey    = C2D_Color32(0x80, 0x80, 0x80, 0xFF);
+static u32 clrOrange;
+static u32 clrOrangeD;
+static u32 clrWhite;
+static u32 clrGrey;
+
+static void initColors(void)
+{
+    clrOrange  = C2D_Color32(0xFF, 0x6B, 0x0F, 0xFF);
+    clrOrangeD = C2D_Color32(0xE8, 0x5A, 0x00, 0xFF);
+    clrWhite   = C2D_Color32(0xFF, 0xFF, 0xFF, 0xFF);
+    clrGrey    = C2D_Color32(0x80, 0x80, 0x80, 0xFF);
+}
 
 #define MENU_ENTRIES 3
 static int menuSel = 0;
@@ -107,9 +115,9 @@ static void addFace(const Vec3* v, u32 color, float brightness)
     f->x0=x0; f->y0=y0; f->x1=x1; f->y1=y1;
     f->x2=x2; f->y2=y2; f->x3=x3; f->y3=y3;
     f->color = C2D_Color32(
-        (u8)(((color >>  0) & 0xFF) * brightness),
-        (u8)(((color >>  8) & 0xFF) * brightness),
-        (u8)(((color >> 16) & 0xFF) * brightness),
+        (u8)((color >>  0) & 0xFF) * brightness,
+        (u8)((color >>  8) & 0xFF) * brightness,
+        (u8)((color >> 16) & 0xFF) * brightness,
         0xFF);
 }
 
@@ -216,10 +224,12 @@ static void syncHandWithBox(Hand* h)
 static void updateHands(void)
 {
     u32 held = hidKeysHeld();
-    circlePadEntry pad;
-    circlePadRead(&pad);
+    circlePosition pad;
+    hidCircleRead(&pad);
 
-    float dx = pad.dx, dy = pad.dy;
+    float dx = pad.dx / 156.0f, dy = pad.dy / 156.0f;
+    if(dx > 1.0f) dx = 1.0f; if(dx < -1.0f) dx = -1.0f;
+    if(dy > 1.0f) dy = 1.0f; if(dy < -1.0f) dy = -1.0f;
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
@@ -301,14 +311,14 @@ static void tryGrab(void)
 
 static void updatePlayer(float dt)
 {
-    circlePadEntry pad;
-    circlePadRead(&pad);
+    circlePosition pad;
+    hidCircleRead(&pad);
 
-    float dx = pad.dx, dy = pad.dy;
+    float dx = pad.dx / 156.0f, dy = pad.dy / 156.0f;
+    if(dx > 1.0f) dx = 1.0f; if(dx < -1.0f) dx = -1.0f;
+    if(dy > 1.0f) dy = 1.0f; if(dy < -1.0f) dy = -1.0f;
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
-    if(fabsf(dx) > 1.0f) dx = dx > 0 ? 1.0f : -1.0f;
-    if(fabsf(dy) > 1.0f) dy = dy > 0 ? 1.0f : -1.0f;
 
     // camera rotate: X = left, B = right, Y = up, A = down
     u32 down = hidKeysDown();
@@ -338,23 +348,22 @@ static void initWorld(void)
         { -5, 0.4f, -5 }, { 5, 0.8f, -6 }, { -6, 0.3f, 4 }, { 4, 1.0f, 5 },
         { 0, 0.5f, 0 }, { -4, 0.7f, -1 }, { 6, 0.5f, 1 }, { -2, 0.6f, 7 }
     };
-    static const u32 colors[8] = {
-        C2D_Color32(0xE8,0x4C,0x4C,0xFF),
-        C2D_Color32(0x4C,0x8B,0xE8,0xFF),
-        C2D_Color32(0x5C,0xD8,0x5C,0xFF),
-        C2D_Color32(0xE8,0xD8,0x4C,0xFF),
-        C2D_Color32(0xA8,0x5C,0xE8,0xFF),
-        C2D_Color32(0x4C,0xE8,0xD8,0xFF),
-        C2D_Color32(0xE8,0xA0,0x4C,0xFF),
-        C2D_Color32(0xE8,0x7C,0xE8,0xFF)
-    };
     int i;
     for(i = 0; i < MAX_BOXES; i++){
         boxes[i].pos.x = coords[i][0];
         boxes[i].pos.y = coords[i][1];
         boxes[i].pos.z = coords[i][2];
         boxes[i].size.x = 0.5f; boxes[i].size.y = 0.5f; boxes[i].size.z = 0.5f;
-        boxes[i].color = colors[i];
+        switch(i){
+            case 0: boxes[i].color = C2D_Color32(0xE8,0x4C,0x4C,0xFF); break;
+            case 1: boxes[i].color = C2D_Color32(0x4C,0x8B,0xE8,0xFF); break;
+            case 2: boxes[i].color = C2D_Color32(0x5C,0xD8,0x5C,0xFF); break;
+            case 3: boxes[i].color = C2D_Color32(0xE8,0xD8,0x4C,0xFF); break;
+            case 4: boxes[i].color = C2D_Color32(0xA8,0x5C,0xE8,0xFF); break;
+            case 5: boxes[i].color = C2D_Color32(0x4C,0xE8,0xD8,0xFF); break;
+            case 6: boxes[i].color = C2D_Color32(0xE8,0xA0,0x4C,0xFF); break;
+            default: boxes[i].color = C2D_Color32(0xE8,0x7C,0xE8,0xFF); break;
+        }
         boxes[i].grabbed = false;
         boxes[i].grabHand = -1;
     }
@@ -552,6 +561,7 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
 int main(void)
 {
     gfxInitDefault();
+    initColors();
 
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
