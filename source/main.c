@@ -84,10 +84,9 @@ static int project(float x, float y, float z, float* sx, float* sy, float* czOut
     float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
     float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
 
-    // canonical camera basis: yaw around Y, pitch up positive, look along -Z at yaw=0
-    float R[3] = { cY, 0.0f, sY };
-    float F[3] = { sY*cP, sP, -cY*cP };
-    float U[3] = { -sY*sP, cP, cY*sP };
+    float R[3] = { cY, 0.0f, -sY };
+    float U[3] = { sY*sP, -cP, cY*sP };
+    float F[3] = { sY*cP, sP, cY*cP };
 
     float cx = rx*R[0] + ry*R[1] + rz*R[2];
     float cy = rx*U[0] + ry*U[1] + rz*U[2];
@@ -96,7 +95,7 @@ static int project(float x, float y, float z, float* sx, float* sy, float* czOut
     if(cz < 0.2f) return 0;
     float inv = FOCAL / cz;
     *sx = SCREEN_W/2.0f + cx*inv;
-    *sy = SCREEN_H/2.0f - cy*inv;
+    *sy = SCREEN_H/2.0f + cy*inv;
     if(czOut) *czOut = cz;
     return 1;
 }
@@ -236,9 +235,9 @@ static void updateHands(void)
 
     float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
     float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
-    float R[3] = { cY, 0.0f, sY };
-    float F[3] = { sY*cP, sP, -cY*cP };
-    float U[3] = { -sY*sP, cP, cY*sP };
+    float R[3] = { cY, 0.0f, -sY };
+    float U[3] = { sY*sP, -cP, cY*sP };
+    float F[3] = { sY*cP, sP, cY*cP };
 
     float px = cam.pos.x, py = cam.pos.y, pz = cam.pos.z;
 
@@ -322,18 +321,21 @@ static void updatePlayer(float dt)
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
-    // camera rotates while the button is held: X=left B=right Y=up A=down
-    if(held & KEY_X) cam.yaw   -= 2.5f * dt;
-    if(held & KEY_B) cam.yaw   += 2.5f * dt;
-    if(held & KEY_Y) cam.pitch  = fminf(cam.pitch + 2.5f * dt,  1.4f);
-    if(held & KEY_A) cam.pitch  = fmaxf(cam.pitch - 2.5f * dt, -1.4f);
+    // camera follows the PHYSICAL position of the ABXY buttons on 3DS:
+    // X (top) -> look up, B (bottom) -> look down,
+    // Y (left) -> look left, A (right) -> look right.
+    // NOTE: in this projection pitch+ tilts the camera DOWN, so up = pitch-.
+    if(held & KEY_X) cam.pitch  = fmaxf(cam.pitch - 2.5f * dt, -1.4f);
+    if(held & KEY_B) cam.pitch  = fminf(cam.pitch + 2.5f * dt,  1.4f);
+    if(held & KEY_Y) cam.yaw   -= 2.5f * dt;
+    if(held & KEY_A) cam.yaw   += 2.5f * dt;
 
     // walking only when hands are not moving (L/R not held)
     if(!(held & (KEY_L | KEY_R))){
         float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
         float speed = 5.0f * dt;
         cam.pos.x += (cY*dx + sY*dy) * speed;
-        cam.pos.z += (-sY*dx - cY*dy) * speed;
+        cam.pos.z += (-sY*dx + cY*dy) * speed;
     }
 
     // clamp inside room
@@ -528,12 +530,12 @@ static void drawGameHud(C3D_RenderTarget* bottom)
 
     drawText("STICK: walk", 160.0f, 40.0f, 1.0f, clrWhite, true);
     drawText("L/R + STICK: hands", 160.0f, 65.0f, 1.0f, clrWhite, true);
-    drawText("X: look left   B: look right", 160.0f, 100.0f, 0.8f, clrWhite, true);
-    drawText("Y: look up     A: look down", 160.0f, 125.0f, 0.8f, clrWhite, true);
+    drawText("X: look up   B: look down", 160.0f, 100.0f, 0.8f, clrWhite, true);
+    drawText("Y: look left A: look right", 160.0f, 125.0f, 0.8f, clrWhite, true);
     drawText("L+R: grab/release", 160.0f, 155.0f, 1.0f, clrWhite, true);
     {
         char dbg[64];
-        snprintf(dbg, sizeof(dbg), "v2  yaw:%d pitch:%d", (int)(cam.yaw*57.2958f), (int)(cam.pitch*57.2958f));
+        snprintf(dbg, sizeof(dbg), "v3  yaw:%d pitch:%d", (int)(cam.yaw*57.2958f), (int)(cam.pitch*57.2958f));
         drawText(dbg, 160.0f, 190.0f, 0.6f, clrWhite, true);
     }
     drawText("START: back to menu", 160.0f, 220.0f, 0.8f, clrWhite, true);
