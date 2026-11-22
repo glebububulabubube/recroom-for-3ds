@@ -5,7 +5,7 @@ BasicInfo:
 
 TitleInfo:
   Category                : Application
-  UniqueId                : 0x1B0001
+  UniqueId                : 0x1B000
 
 Option:
   UseOnSD                 : true # true if App is to be installed to SD
