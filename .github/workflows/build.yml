@@ -39,6 +39,12 @@ jobs:
           bannertool 2>&1 | head -3 || true
         shell: bash
 
+      - name: Generate silent banner audio
+        run: |
+          python3 -c "import wave; w=wave.open('banner.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050); w.writeframes(b'\x00\x00'*22050); w.close()"
+          ls -l banner.wav
+        shell: bash
+
       - name: Build
         run: make -j$(nproc)
         shell: bash
