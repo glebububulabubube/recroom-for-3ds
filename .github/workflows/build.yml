@@ -14,15 +14,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup devkitPro (pacman)
-        run: |
-          sudo dkp-pacman-key --init 2>/dev/null || true
-          dkp-pacman -Syy --noconfirm --needed 3ds-dev general-tools || \
-          (sleep 5; dkp-pacman -Syy --noconfirm --needed 3ds-dev general-tools)
-        shell: bash
-        env:
-          TERM: dumb
-
       - name: Install makerom and bannertool
         run: |
           apt-get update -qq && apt-get install -y -qq unzip wget >/dev/null 2>&1 || true
@@ -66,3 +57,4 @@ jobs:
             recroom3ds.elf
             recroom3ds.bin
           if-no-files-found: warn
+
