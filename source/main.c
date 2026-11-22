@@ -311,6 +311,7 @@ static void tryGrab(void)
 
 static void updatePlayer(float dt)
 {
+    u32 held = hidKeysHeld();
     circlePosition pad;
     hidCircleRead(&pad);
 
@@ -320,18 +321,19 @@ static void updatePlayer(float dt)
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
-    // camera rotate: X = left, B = right, Y = up, A = down
-    u32 down = hidKeysDown();
-    if(down & KEY_X) cam.yaw   += 2.2f * dt;
-    if(down & KEY_B) cam.yaw   -= 2.2f * dt;
-    if(down & KEY_Y) cam.pitch  = fminf(cam.pitch + 1.8f * dt,  1.4f);
-    if(down & KEY_A) cam.pitch  = fmaxf(cam.pitch - 1.8f * dt, -1.4f);
+    // camera rotates while the button is held: X=left B=right Y=up A=down
+    if(held & KEY_X) cam.yaw   -= 2.5f * dt;
+    if(held & KEY_B) cam.yaw   += 2.5f * dt;
+    if(held & KEY_Y) cam.pitch  = fminf(cam.pitch + 2.5f * dt,  1.4f);
+    if(held & KEY_A) cam.pitch  = fmaxf(cam.pitch - 2.5f * dt, -1.4f);
 
-    // walking: stick moves in camera's horizontal plane
-    float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
-    float speed = 5.0f * dt;
-    cam.pos.x += (cY*dx + sY*dy) * speed;
-    cam.pos.z += (-sY*dx + cY*dy) * speed;
+    // walking only when hands are not moving (L/R not held)
+    if(!(held & (KEY_L | KEY_R))){
+        float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
+        float speed = 5.0f * dt;
+        cam.pos.x += (cY*dx + sY*dy) * speed;
+        cam.pos.z += (-sY*dx + cY*dy) * speed;
+    }
 
     // clamp inside room
     if(cam.pos.x < -26.0f) cam.pos.x = -26.0f;
@@ -527,7 +529,7 @@ static void drawGameHud(C3D_RenderTarget* bottom)
     drawText("L/R + STICK: hands", 160.0f, 65.0f, 1.0f, clrWhite, true);
     drawText("X: look left   B: look right", 160.0f, 100.0f, 0.8f, clrWhite, true);
     drawText("Y: look up     A: look down", 160.0f, 125.0f, 0.8f, clrWhite, true);
-    drawText("X: grab/release", 160.0f, 160.0f, 1.0f, clrWhite, true);
+    drawText("L+R: grab/release", 160.0f, 160.0f, 1.0f, clrWhite, true);
     drawText("START: back to menu", 160.0f, 215.0f, 0.8f, clrWhite, true);
 }
 
@@ -540,7 +542,7 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
         u32 kDown = hidKeysDown();
 
         if(kDown & KEY_START) break;
-        if(kDown & KEY_X) tryGrab();
+        if((kDown & KEY_L) && (kDown & KEY_R)) tryGrab();
 
         updatePlayer(1.0f/60.0f);
         updateHands();
