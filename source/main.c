@@ -16,9 +16,10 @@
 #define CLEAR_COLOR 0x5A96DCFF
 
 typedef struct { float x, y, z; } V3;
+typedef struct { float r, g, b; } V3c;
 
 // ---- world ----
-typedef struct { V3 pos; V3 col; float size; bool heldL, heldR; } Box;
+typedef struct { V3 pos; V3c col; float size; bool heldL, heldR; } Box;
 #define MAX_BOXES 64
 static Box boxes[MAX_BOXES];
 static int boxCount = 0;
@@ -105,10 +106,10 @@ static void buildView(C3D_Mtx* out){
     Mtx_Translate(&tmp, -cam.x, -cam.y, -cam.z, true); // tmp = T(-pos)
 
     Mtx_Identity(&ry);
-    Mtx_RotY(&ry, -yaw, true);                          // ry = Ry(-yaw)
+    Mtx_RotateY(&ry, -yaw, true);                          // ry = Ry(-yaw)
 
     Mtx_Identity(&rx);
-    Mtx_RotX(&rx, -pitch, true);                        // rx = Rx(-pitch)
+    Mtx_RotateX(&rx, -pitch, true);                        // rx = Rx(-pitch)
 
     C3D_Mtx a; Mtx_Multiply(&a, &ry, &tmp);             // a  = ry*tmp
     Mtx_Multiply(out, &rx, &a);                         // out= rx*ry*tmp
@@ -250,7 +251,6 @@ int main(void){
         C3D_FrameDrawOn(top);
         C3D_RenderTargetClear(top, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
 
-        C3D_ClearBufInfo();
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
 
         C3D_Mtx view; buildView(&view);
