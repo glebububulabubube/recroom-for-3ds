@@ -24,16 +24,9 @@ typedef struct { Vec3 p; Vec3 c; float size; bool heldL, heldR; } Box;
 #define FLOOR_Y   -1.0f
 #define CEIL_Y     3.0f
 
-C2D_Target* top;
-C2D_Target* bottom;
-
-// Forward declarations so nothing is ever implicitly declared (avoids int* type bugs)
-static bool project(const Vec3* w, float* sx, float* sy, float* depth);
-static void drawSky(C2D_Target* t);
-static void drawBox(C2D_Target* t, Box* b);
-static void drawHand(C2D_Target* t, const Vec3* h, bool active);
-static Box* nearestTo(const Vec3* handWorld, float maxDist);
-static void doGrab(bool left, bool* grabFlag, const Vec3* handRel);
+// Globals: render targets (type per official example: C3D_RenderTarget)
+static C3D_RenderTarget* top;
+static C3D_RenderTarget* bottom;
 
 static Box boxes[MAX_BOXES];
 static int boxCount = 0;
@@ -43,6 +36,14 @@ static Vec3 cam={0,0,0};
 static Vec3 handL={ 0.7f, 0.6f,  1.0f};
 static Vec3 handR={-0.7f, 0.6f,  1.0f};
 static bool grabL=false, grabR=false;
+
+// ---- forward declarations (nothing implicit ever) ----
+static bool project(const Vec3* w, float* sx, float* sy, float* depth);
+static void drawSky(void);
+static void drawBox(Box* b);
+static void drawHand(const Vec3* h, bool active);
+static Box* nearestTo(const Vec3* handWorld, float maxDist);
+static void doGrab(bool left, bool* grabFlag, const Vec3* handRel);
 
 static void addBox(float x,float y,float z,float s,float r,float g,float b){
     if(boxCount>=MAX_BOXES) return;
@@ -78,13 +79,11 @@ static bool project(const Vec3* w, float* sx, float* sy, float* depth){
     return true;
 }
 
-static void drawSky(C2D_Target* t){
-    (void)t;
+static void drawSky(void){
     C2D_DrawRectSolid(0,0,0,SCR_WIDTH,SCR_HEIGHT, C2D_Color32(90,150,220,255));
 }
 
-static void drawBox(C2D_Target* t, Box* b){
-    (void)t;
+static void drawBox(Box* b){
     Vec3 min={b->p.x-b->size/2,b->p.y-b->size/2,b->p.z-b->size/2};
     Vec3 max={b->p.x+b->size/2,b->p.y+b->size/2,b->p.z+b->size/2};
     float sx0,sy0,sz0,sx1,sy1,sz1;
@@ -102,8 +101,7 @@ static void drawBox(C2D_Target* t, Box* b){
     C2D_DrawRectSolid(x0,y1-h,0.51f,x1-x0,h,dark);
 }
 
-static void drawHand(C2D_Target* t, const Vec3* h, bool active){
-    (void)t;
+static void drawHand(const Vec3* h, bool active){
     Vec3 w={cam.x+h->x, cam.y+h->y, cam.z+h->z};
     float sx,sy,dz; if(!project(&w,&sx,&sy,&dz)) return;
     float r=10.0f/(dz*0.18f); r=clampf(r,5,16);
@@ -155,12 +153,10 @@ int main(void){
         bool lHandMode=(kHeld & KEY_L);
         bool rHandMode=(kHeld & KEY_R);
 
-        // vertical hand offsets held on dpad (used in hand mode)
         float vAxisL = (kHeld&KEY_DUP?1:(kHeld&KEY_DDOWN?-1:0));
-        float vAxisR = vAxisL; // shared; in practice chosen by hand mode
+        float vAxisR = vAxisL;
 
         if(!lHandMode && !rHandMode){
-            // move/look when no hand mode
             float fx=-sinf(pyaw), fz=-cosf(pyaw);
             float rx=cosf(pyaw), rz=-sinf(pyaw);
             float fwd=(float)cp.dy/90.0f;
@@ -210,8 +206,9 @@ int main(void){
 
         // render top (first person)
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        C2D_TargetClear(top, C2D_Color32(90,150,220,255));
         C2D_SceneBegin(top);
-        drawSky(top);
+        drawSky();
         // floor grid
         for(int gx=-5;gx<=5;gx++)for(int gz=-5;gz<=5;gz++){
             Vec3 p={(float)gx, FLOOR_Y, (float)gz};
@@ -226,13 +223,16 @@ int main(void){
             static int order[MAX_BOXES]; static float dv[MAX_BOXES];
             for(int i=0;i<boxCount;i++){ order[i]=i; Vec3 d; vsub(&d,&cam,&boxes[i].p); dv[i]=vdot(&d,&d);}
             for(int i=1;i<boxCount;i++){int j=i;while(j>0&&dv[order[j]]>dv[order[j-1]]){int t=order[j];order[j]=order[j-1];order[j-1]=t;j--;}}
-            for(int i=0;i<boxCount;i++) drawBox(top,&boxes[order[i]]);
+            for(int i=0;i<boxCount;i++) drawBox(&boxes[order[i]]);
         }
-        drawHand(top,&handL,grabL);
-        drawHand(top,&handR,grabR);
+        drawHand(&handL,grabL);
+        drawHand(&handR,grabR);
         C2D_Flush();
+        C3D_FrameEnd(0);
 
         // render bottom (status)
+        C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+        C2D_TargetClear(bottom, C2D_Color32(30,30,40,255));
         C2D_SceneBegin(bottom);
         C2D_DrawRectSolid(40,100,0.5f,40,30, lHandMode?C2D_Color32(60,255,90,255):C2D_Color32(70,70,70,255));
         C2D_DrawRectSolid(240,100,0.5f,40,30, rHandMode?C2D_Color32(255,150,40,255):C2D_Color32(70,70,70,255));
