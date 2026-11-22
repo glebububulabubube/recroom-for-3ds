@@ -18,7 +18,7 @@ jobs:
         run: |
           sudo dkp-pacman-key --init 2>/dev/null || true
           (dkp-pacman -Syu --noconfirm) || true
-          dkp-pacman -S --noconfirm 3ds-dev
+          dkp-pacman -S --noconfirm 3ds-dev general-tools
         shell: bash
         env:
           TERM: dumb
@@ -27,11 +27,12 @@ jobs:
         run: make -j$(nproc)
         shell: bash
 
-      - name: Upload 3DSX
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: recroom3ds-3dsx
+          name: recroom3ds-build
           path: |
+            recroom3ds.cia
             recroom3ds.3dsx
             recroom3ds.smdh
             recroom3ds.elf
