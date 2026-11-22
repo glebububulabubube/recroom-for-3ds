@@ -122,7 +122,7 @@ all: $(BUILD) $(GFXBUILD) $(DEPSDIR) $(ROMFS_T3XFILES) $(T3XHFILES)
 	@echo building .cia ...
 	@bannertool makebanner -o $(BUILD)/banner.bin -i $(TOPDIR)/banner.png -a $(TOPDIR)/banner.wav
 	@bannertool makesmdh -s "$(APP_TITLE)" -l "$(APP_DESCRIPTION)" -p "$(APP_AUTHOR)" -i $(TOPDIR)/icon.png -o $(CURDIR)/$(TARGET).smdh
-	@makerom -f cia -o $(CURDIR)/$(TARGET).cia -elf $(BUILD)/$(TARGET).elf -banner $(BUILD)/banner.bin -icon $(CURDIR)/$(TARGET).smdh
+	@makerom -f cia -o $(CURDIR)/$(TARGET).cia -elf $(BUILD)/$(TARGET).elf -rsf $(TOPDIR)/$(TARGET).rsf -banner $(BUILD)/banner.bin -icon $(CURDIR)/$(TARGET).smdh
 
 $(BUILD):
 	@mkdir -p $@
