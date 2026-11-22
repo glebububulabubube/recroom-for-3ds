@@ -18,9 +18,6 @@
 typedef struct { float x, y, z; } V3;
 typedef struct { float r, g, b; } V3c;
 
-// 8 floats per vertex: position xyzw + color rgba
-typedef struct { float x, y, z, w, r, g, b, a; } Vertex;
-
 // ---- world ----
 typedef struct { V3 pos; V3c col; float size; bool heldL, heldR; } Box;
 #define MAX_BOXES 64
@@ -34,7 +31,7 @@ static V3 handL = {-0.35f, -0.28f, 0.55f};
 static V3 handR = { 0.35f, -0.28f, 0.55f};
 static int heldLIdx = -1, heldRIdx = -1;
 
-// ---- shader / buffers ----
+// ---- shader ----
 static DVLB_s* dvlb;
 static shaderProgram_s program;
 static int uLoc_modelView, uLoc_projection;
@@ -47,7 +44,7 @@ static const float CUBE_V[8][3] = {
     {-1,-1,-1},{ 1,-1,-1},{ 1, 1,-1},{-1, 1,-1},
     {-1,-1, 1},{ 1,-1, 1},{ 1, 1, 1},{-1, 1, 1},
 };
-static const u16 CUBE_T[36] = {
+static const int CUBE_T[36] = {
     0,1,2, 0,2,3,   // back (z=-)
     5,4,7, 5,7,6,   // front (z=+)
     4,0,3, 4,3,7,   // left
@@ -56,16 +53,6 @@ static const u16 CUBE_T[36] = {
     4,5,1, 4,1,0,   // bottom
 };
 static const float FACE_SHADE[6] = {0.7f, 0.9f, 0.6f, 0.8f, 1.0f, 0.5f};
-
-// per-face corner order (CCW when viewed from outside), so faces light correctly
-static const int FACE_CORNER[6][4] = {
-    {0,1,2,3},   // back  (z-)
-    {5,4,7,6},   // front (z+)
-    {4,0,3,7},   // left
-    {1,5,6,2},   // right
-    {3,2,6,7},   // top
-    {4,5,1,0},   // bottom
-};
 
 static float clampf(float v, float lo, float hi){ return v<lo?lo:(v>hi?hi:v); }
 
@@ -87,7 +74,7 @@ static void initWorld(void){
     addBox( 0, 0.25f,  0, 0.75f, 0.60f, 0.60f, 0.60f);
 }
 
-// ---- init shader + buffers ----
+// ---- init shader (same layout as official simple_tri example) ----
 static void sceneInit(void){
     dvlb = DVLB_ParseFile((u32*)vshader_shbin, vshader_shbin_size);
     shaderProgramInit(&program);
@@ -99,8 +86,8 @@ static void sceneInit(void){
 
     C3D_AttrInfo* ai = C3D_GetAttrInfo();
     AttrInfo_Init(ai);
-    AttrInfo_AddLoader(ai, 0, GPU_FLOAT, 4); // position xyzw
-    AttrInfo_AddLoader(ai, 1, GPU_FLOAT, 4); // color rgba
+    AttrInfo_AddLoader(ai, 0, GPU_FLOAT, 4); // v0 = position xyzw
+    AttrInfo_AddFixed(ai, 1);                // v1 = color (fixed attribute)
 
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
@@ -113,10 +100,10 @@ static void sceneInit(void){
 
 static void fillBoth(u32 color){
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C3D_FrameDrawOn(top);
     C3D_RenderTargetClear(top, C3D_CLEAR_ALL, color, 0);
-    C3D_FrameDrawOn(bottom);
+    C3D_FrameDrawOn(top);
     C3D_RenderTargetClear(bottom, C3D_CLEAR_ALL, color, 0);
+    C3D_FrameDrawOn(bottom);
     C3D_FrameEnd(0);
 }
 
@@ -135,7 +122,7 @@ static void buildView(C3D_Mtx* out){
     Mtx_Multiply(out, &rx, &a);
 }
 
-// draw one cube via vertex buffer: 24 verts (4 per face, own color), 36 indices
+// draw one cube: 6 faces drawn separately, each with its own fixed color (light shading)
 static void drawCubeAt(C3D_Mtx* view, V3 pos, float size, float r, float g, float b){
     C3D_Mtx model, scale, tmpmv, mv;
     Mtx_Identity(&model);
@@ -149,35 +136,17 @@ static void drawCubeAt(C3D_Mtx* view, V3 pos, float size, float r, float g, floa
 
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &mv);
 
-    static Vertex fverts[24];
-    static const u16 idx[36] = {
-        0,1,2, 0,2,3,
-        4,5,6, 4,6,7,
-        8,9,10, 8,10,11,
-        12,13,14, 12,14,15,
-        16,17,18, 16,18,19,
-        20,21,22, 20,22,23,
-    };
-
     for(int f=0; f<6; f++){
         float sh=FACE_SHADE[f];
-        V3c c={r*sh, g*sh, b*sh};
-        for(int v=0; v<4; v++){
-            int vi=FACE_CORNER[f][v];
-            int o=f*4+v;
-            fverts[o].x=pos.x + CUBE_V[vi][0]*size;
-            fverts[o].y=pos.y + CUBE_V[vi][1]*size;
-            fverts[o].z=pos.z + CUBE_V[vi][2]*size;
-            fverts[o].w=1.0f;
-            fverts[o].r=c.r; fverts[o].g=c.g; fverts[o].b=c.b; fverts[o].a=1.0f;
+        C3D_FixedAttribSet(1, r*sh, g*sh, b*sh, 1.0f);
+
+        C3D_ImmDrawBegin(GPU_TRIANGLES);
+        for(int t=0; t<6; t++){
+            int vi=CUBE_T[f*6+t];
+            C3D_ImmSendAttrib(CUBE_V[vi][0], CUBE_V[vi][1], CUBE_V[vi][2], 1.0f);
         }
+        C3D_ImmDrawEnd();
     }
-
-    C3D_BufInfo* bi = C3D_GetBufInfo();
-    BufInfo_Init(bi);
-    BufInfo_Add(bi, fverts, sizeof(Vertex), 2, 0x210);
-
-    C3D_DrawArrays(GPU_TRIANGLES, 0, 36);
 }
 
 // world position from a camera-relative offset
@@ -295,8 +264,8 @@ int main(void){
 
         // ---- render ----
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        C3D_FrameDrawOn(top);
         C3D_RenderTargetClear(top, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
+        C3D_FrameDrawOn(top);
 
         C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_projection, &projection);
 
@@ -314,8 +283,8 @@ int main(void){
         }
 
         // bottom screen stays dark
-        C3D_FrameDrawOn(bottom);
         C3D_RenderTargetClear(bottom, C3D_CLEAR_ALL, 0xFF202020, 0);
+        C3D_FrameDrawOn(bottom);
 
         C3D_FrameEnd(0);
     }
