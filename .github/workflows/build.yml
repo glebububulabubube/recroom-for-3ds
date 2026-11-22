@@ -39,9 +39,15 @@ jobs:
           bannertool 2>&1 | head -3 || true
         shell: bash
 
-      - name: Generate silent banner audio
+      - name: Prepare banner audio
         run: |
-          python3 -c "import wave; w=wave.open('banner.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050); w.writeframes(b'\x00\x00'*22050); w.close()"
+          apt-get update -qq >/dev/null 2>&1 || true
+          apt-get install -y -qq ffmpeg >/dev/null 2>&1 || true
+          if [ -f banner.mp3 ]; then
+            ffmpeg -y -i banner.mp3 -ac 1 -ar 22050 -sample_fmt s16 banner.wav >/dev/null 2>&1
+          else
+            python3 -c "import wave; w=wave.open('banner.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050); w.writeframes(b'\x00\x00'*22050); w.close()"
+          fi
           ls -l banner.wav
         shell: bash
 
