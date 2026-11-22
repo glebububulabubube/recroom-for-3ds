@@ -23,6 +23,22 @@ jobs:
         env:
           TERM: dumb
 
+      - name: Install makerom and bannertool
+        run: |
+          apt-get update -qq && apt-get install -y -qq unzip wget >/dev/null 2>&1 || true
+          wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip -O /tmp/makerom.zip
+          unzip -o /tmp/makerom.zip -d /tmp/makerom_dl
+          cp /tmp/makerom_dl/makerom /usr/local/bin/makerom
+          chmod +x /usr/local/bin/makerom
+          wget -q https://github.com/diasurgical/bannertool/releases/download/1.2.0/bannertool.zip -O /tmp/bannertool.zip
+          unzip -o /tmp/bannertool.zip -d /tmp/bannertool_dl
+          cp /tmp/bannertool_dl/linux-x86_64/bannertool /usr/local/bin/bannertool
+          chmod +x /usr/local/bin/bannertool
+          echo "--- tool check ---"
+          makerom -version || true
+          bannertool 2>&1 | head -3 || true
+        shell: bash
+
       - name: Build
         run: make -j$(nproc)
         shell: bash
