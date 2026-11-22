@@ -187,7 +187,7 @@ static void doGrabRight(void){
 int main(void){
     gfxInitDefault();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
-    top = C3D_RenderTargetCreate(TOP_H, TOP_W, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+    top = C3D_RenderTargetCreate(TOP_W, TOP_H, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
     C3D_RenderTargetSetOutput(top, GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
 
     sceneInit();
@@ -255,7 +255,7 @@ int main(void){
 
         C3D_Mtx view; buildView(&view);
 
-        // floor grid fake: draw thin dark lines as flat quads? keep simple: just floor slab + items
+        // floor grid fake: keep simple: just floor slab + items
         for(int i=0;i<boxCount;i++)
             drawCubeAt(&view, boxes[i].pos, boxes[i].size, boxes[i].col.r, boxes[i].col.g, boxes[i].col.b);
 
