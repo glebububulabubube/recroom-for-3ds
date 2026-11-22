@@ -10,27 +10,6 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
 #---------------------------------------------------------------------------------
-# TARGET is the name of the output
-# BUILD is the directory where object files & intermediate files will be placed
-# SOURCES is a list of directories containing source code
-# DATA is a list of directories containing data files
-# INCLUDES is a list of directories containing header files
-# GRAPHICS is a list of directories containing graphics files
-# GFXBUILD is the directory where converted graphics files will be placed
-#   If set to $(BUILD), it will statically link in the converted
-#   files as if they were data files.
-#
-# NO_SMDH: if set to anything, no SMDH file is generated.
-# ROMFS is the directory which contains the RomFS, relative to the Makefile (Optional)
-# APP_TITLE is the name of the app stored in the SMDH file (Optional)
-# APP_DESCRIPTION is the description of the app stored in the SMDH file (Optional)
-# APP_AUTHOR is the author of the app stored in the SMDH file (Optional)
-# ICON is the filename of the icon (.png), relative to the project folder.
-#   If not set, it attempts to use one of the following (in this order):
-#     - <Project name>.png
-#     - icon.png
-#     - <libctru folder>/default_icon.png
-#---------------------------------------------------------------------------------
 TARGET		:=	recroom3ds
 BUILD		:=	build
 SOURCES		:=	source
@@ -41,8 +20,6 @@ GFXBUILD	:=	$(BUILD)
 #ROMFS		:=	romfs
 #GFXBUILD	:=	$(ROMFS)/gfx
 
-#---------------------------------------------------------------------------------
-# options for code generation
 #---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
@@ -59,16 +36,9 @@ LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 LIBS	:= -lcitro2d -lcitro3d -lctru -lm
 
-#---------------------------------------------------------------------------------
-# list of directories containing libraries, this must be the top level containing
-# include and lib
-#---------------------------------------------------------------------------------
 LIBDIRS	:= $(CTRULIB)
 
 
-#---------------------------------------------------------------------------------
-# no real need to edit anything past this point unless you need to add additional
-# rules for different file extensions
 #---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 #---------------------------------------------------------------------------------
@@ -90,9 +60,6 @@ SHLISTFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.shlist)))
 GFXFILES	:=	$(foreach dir,$(GRAPHICS),$(notdir $(wildcard $(dir)/*.t3s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
-#---------------------------------------------------------------------------------
-# use CXX for linking C++ projects, CC for standard C
-#---------------------------------------------------------------------------------
 ifeq ($(strip $(CPPFILES)),)
 #---------------------------------------------------------------------------------
 	export LD	:=	$(CC)
@@ -104,7 +71,6 @@ else
 endif
 #---------------------------------------------------------------------------------
 
-#---------------------------------------------------------------------------------
 ifeq ($(GFXBUILD),$(BUILD))
 #---------------------------------------------------------------------------------
 export T3XFILES :=  $(GFXFILES:.t3s=.t3x)
@@ -194,16 +160,12 @@ else
 DEPENDS	:=	$(OFILES:.o=.d)
 
 #---------------------------------------------------------------------------------
-# main targets
-#---------------------------------------------------------------------------------
 $(OUTPUT).3dsx	:	$(OUTPUT).elf $(_3DSXDEPS)
 
 $(OFILES_SOURCES) : $(HFILES)
 
 $(OUTPUT).elf	:	$(OFILES)
 
-#---------------------------------------------------------------------------------
-# you need a rule like this for each extension you use as binary data
 #---------------------------------------------------------------------------------
 %.bin.o	%_bin.h :	%.bin
 #---------------------------------------------------------------------------------
