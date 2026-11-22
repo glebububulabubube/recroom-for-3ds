@@ -17,8 +17,8 @@ jobs:
       - name: Setup devkitPro (pacman)
         run: |
           sudo dkp-pacman-key --init 2>/dev/null || true
-          (dkp-pacman -Syu --noconfirm) || true
-          dkp-pacman -S --noconfirm 3ds-dev general-tools
+          dkp-pacman -Syy --noconfirm --needed 3ds-dev general-tools || \
+          (sleep 5; dkp-pacman -Syy --noconfirm --needed 3ds-dev general-tools)
         shell: bash
         env:
           TERM: dumb
