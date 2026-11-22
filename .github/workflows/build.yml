@@ -26,7 +26,7 @@ jobs:
       - name: Install makerom and bannertool
         run: |
           apt-get update -qq && apt-get install -y -qq unzip wget >/dev/null 2>&1 || true
-          wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip -O /tmp/makerom.zip
+          wget -q https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip -O /tmp/makerom.zip
           unzip -o /tmp/makerom.zip -d /tmp/makerom_dl
           cp /tmp/makerom_dl/makerom /usr/local/bin/makerom
           chmod +x /usr/local/bin/makerom
