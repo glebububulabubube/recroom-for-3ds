@@ -529,8 +529,13 @@ static void drawGameHud(C3D_RenderTarget* bottom)
     drawText("L/R + STICK: hands", 160.0f, 65.0f, 1.0f, clrWhite, true);
     drawText("X: look left   B: look right", 160.0f, 100.0f, 0.8f, clrWhite, true);
     drawText("Y: look up     A: look down", 160.0f, 125.0f, 0.8f, clrWhite, true);
-    drawText("L+R: grab/release", 160.0f, 160.0f, 1.0f, clrWhite, true);
-    drawText("START: back to menu", 160.0f, 215.0f, 0.8f, clrWhite, true);
+    drawText("L+R: grab/release", 160.0f, 155.0f, 1.0f, clrWhite, true);
+    {
+        char dbg[64];
+        snprintf(dbg, sizeof(dbg), "v2  yaw:%d pitch:%d", (int)(cam.yaw*57.2958f), (int)(cam.pitch*57.2958f));
+        drawText(dbg, 160.0f, 190.0f, 0.6f, clrWhite, true);
+    }
+    drawText("START: back to menu", 160.0f, 220.0f, 0.8f, clrWhite, true);
 }
 
 static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
