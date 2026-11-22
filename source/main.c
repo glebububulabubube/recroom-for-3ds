@@ -27,6 +27,7 @@ static int boxCount = 0;
 // ---- camera / hands ----
 static V3 cam = {0, 0, 0};
 static float yaw = 0.0f, pitch = 0.0f;
+// hands kept in camera-relative space (glued to the view)
 static V3 handL = {-0.35f, -0.28f, 0.55f};
 static V3 handR = { 0.35f, -0.28f, 0.55f};
 static int heldLIdx = -1, heldRIdx = -1;
@@ -37,7 +38,6 @@ static shaderProgram_s program;
 static int uLoc_modelView, uLoc_projection;
 static C3D_Mtx projection;
 static C3D_RenderTarget* top;
-static C3D_RenderTarget* bottom;
 
 // unit cube (half-extent 1, centered at origin): 8 corners, 12 triangles
 static const float CUBE_V[8][3] = {
@@ -87,8 +87,8 @@ static void sceneInit(void){
 
     C3D_AttrInfo* ai = C3D_GetAttrInfo();
     AttrInfo_Init(ai);
-    AttrInfo_AddLoader(ai, 0, GPU_FLOAT, 3);
-    AttrInfo_AddLoader(ai, 1, GPU_FLOAT, 3);
+    AttrInfo_AddLoader(ai, 0, GPU_FLOAT, 3); // position xyz
+    AttrInfo_AddLoader(ai, 1, GPU_FLOAT, 4); // color rgba
 
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
@@ -99,29 +99,20 @@ static void sceneInit(void){
                         0.0f, 0.0f, 0.0f);
 }
 
-static void fillBoth(u32 color){
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    C3D_FrameDrawOn(top);
-    C3D_RenderTargetClear(top, C3D_CLEAR_ALL, color, 0);
-    C3D_FrameDrawOn(bottom);
-    C3D_RenderTargetClear(bottom, C3D_CLEAR_ALL, color, 0);
-    C3D_FrameEnd(0);
-}
-
 // Build view matrix from camera (position + yaw/pitch). Result: X*Y*T(-pos).
 static void buildView(C3D_Mtx* out){
     C3D_Mtx tmp, ry, rx;
     Mtx_Identity(&tmp);
-    Mtx_Translate(&tmp, -cam.x, -cam.y, -cam.z, true);
+    Mtx_Translate(&tmp, -cam.x, -cam.y, -cam.z, true); // tmp = T(-pos)
 
     Mtx_Identity(&ry);
-    Mtx_RotateY(&ry, -yaw, true);
+    Mtx_RotateY(&ry, -yaw, true);                          // ry = Ry(-yaw)
 
     Mtx_Identity(&rx);
-    Mtx_RotateX(&rx, -pitch, true);
+    Mtx_RotateX(&rx, -pitch, true);                        // rx = Rx(-pitch)
 
-    C3D_Mtx a; Mtx_Multiply(&a, &ry, &tmp);
-    Mtx_Multiply(out, &rx, &a);
+    C3D_Mtx a; Mtx_Multiply(&a, &ry, &tmp);             // a  = ry*tmp
+    Mtx_Multiply(out, &rx, &a);                         // out= rx*ry*tmp
 }
 
 // draw a cube: model = T(pos)*S(size), mv = view*model
@@ -133,8 +124,8 @@ static void drawCubeAt(C3D_Mtx* view, V3 pos, float size, float r, float g, floa
     Mtx_Identity(&scale);
     scale.m[0]=scale.m[5]=scale.m[10]=size;
 
-    Mtx_Multiply(&tmpmv, &scale, &model);
-    Mtx_Multiply(&mv, view, &tmpmv);
+    Mtx_Multiply(&tmpmv, &scale, &model);   // scale*model
+    Mtx_Multiply(&mv, view, &tmpmv);        // view*scale*model
 
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uLoc_modelView, &mv);
 
@@ -151,6 +142,7 @@ static void drawCubeAt(C3D_Mtx* view, V3 pos, float size, float r, float g, floa
     C3D_ImmDrawEnd();
 }
 
+// world position from a camera-relative offset
 static void toWorld(V3* w, const V3* rel){
     float cy=cosf(yaw), sy=sinf(yaw), cp=cosf(pitch), sp=sinf(pitch);
     V3 f={-sy*cp, sp, -cy*cp};
@@ -195,22 +187,11 @@ static void doGrabRight(void){
 int main(void){
     gfxInitDefault();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
-
     top = C3D_RenderTargetCreate(TOP_W, TOP_H, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
     C3D_RenderTargetSetOutput(top, GFX_TOP, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
 
-    bottom = C3D_RenderTargetCreate(320, 240, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
-    C3D_RenderTargetSetOutput(bottom, GFX_BOTTOM, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
-
-    fillBoth(0xFF0000FF);  // КРАСНЫЙ: GPU и таргеты инициализированы
-
     sceneInit();
-
-    fillBoth(0x00FF00FF);  // ЗЕЛЁНЫЙ: шейдер скомпилирован и загружен
-
     initWorld();
-
-    fillBoth(0x0000FFFF);  // СИНИЙ: мир создан, входим в игровой цикл
 
     while(aptMainLoop()){
         hidScanInput();
@@ -254,12 +235,14 @@ int main(void){
             if(kDown&KEY_X) doGrabRight();
         }
 
+        // held objects follow their hand (in camera space -> world)
         if(heldLIdx>=0){
             V3 w; toWorld(&w,&handL); boxes[heldLIdx].pos=w;
         }
         if(heldRIdx>=0){
             V3 w; toWorld(&w,&handR); boxes[heldRIdx].pos=w;
         }
+        // keep boxes above floor
         for(int i=0;i<boxCount;i++)
             if(boxes[i].pos.y < -1.0f+boxes[i].size/2) boxes[i].pos.y=-1.0f+boxes[i].size/2;
 
@@ -272,9 +255,11 @@ int main(void){
 
         C3D_Mtx view; buildView(&view);
 
+        // floor grid fake: draw thin dark lines as flat quads? keep simple: just floor slab + items
         for(int i=0;i<boxCount;i++)
             drawCubeAt(&view, boxes[i].pos, boxes[i].size, boxes[i].col.r, boxes[i].col.g, boxes[i].col.b);
 
+        // hands as small cubes glued to camera (world-space from camera-relative offset)
         {
             V3 hl, hr;
             toWorld(&hl, &handL);
@@ -282,10 +267,6 @@ int main(void){
             drawCubeAt(&view, hl, 0.16f, 0.5f, 0.9f, 0.5f); // left hand (greenish)
             drawCubeAt(&view, hr, 0.16f, 0.9f, 0.5f, 0.2f); // right hand (orange)
         }
-
-        // bottom screen stays readable: dark fill
-        C3D_FrameDrawOn(bottom);
-        C3D_RenderTargetClear(bottom, C3D_CLEAR_ALL, 0xFF202020, 0);
 
         C3D_FrameEnd(0);
     }
