@@ -55,11 +55,27 @@ typedef struct {
     float yaw, pitch;
 } Camera;
 
+// a walkable, talkable Rec Room character built from cubes
+typedef struct {
+    Vec3 pos;       // feet position
+    Vec3 target;    // patrol target
+    float speed;
+    float pause;    // rest timer before next target
+    char name[16];
+} Bot;
+
+#define MAX_BOTS 3
+static Bot bots[MAX_BOTS];
+
 #define MAX_BOXES 8
 static Box boxes[MAX_BOXES];
 static Hand handL, handR;
 static Camera cam;
 static int grabbedBox = -1; // box currently attached to a hand
+
+// last spoken bot line shown on the bottom screen
+static char botMsg[96] = "";
+static float botMsgTimer = 0.0f;
 
 typedef struct {
     float depth;
@@ -67,7 +83,7 @@ typedef struct {
     u32 color;
 } Face;
 
-#define MAX_FACES 256
+#define MAX_FACES 512
 static Face faces[MAX_FACES];
 static int faceCount = 0;
 
@@ -202,6 +218,8 @@ static void buildWorldFaces(void)
         addBoxFaces(&h);
     }
 
+    buildBotFaces();
+
     qsort(faces, faceCount, sizeof(Face), cmpFaces);
 }
 
@@ -210,6 +228,180 @@ static void moveHandTo(Hand* h, float tx, float ty, float tz)
     h->world.x += (tx - h->world.x) * 0.3f;
     h->world.y += (ty - h->world.y) * 0.3f;
     h->world.z += (tz - h->world.z) * 0.3f;
+}
+
+// ---------------- bots: patrol + talk ----------------
+
+static void initBots(void)
+{
+    static const char* names[MAX_BOTS] = { "Marvin", "Chip", "Sparx" };
+    static const float spots[MAX_BOTS][2] = {
+        { -8.0f,  6.0f }, {  9.0f, -4.0f }, { -3.0f, -9.0f }
+    };
+    int i;
+    for(i = 0; i < MAX_BOTS; i++){
+        memset(&bots[i], 0, sizeof(Bot));
+        strncpy(bots[i].name, names[i], 15);
+        bots[i].pos.x = spots[i][0];
+        bots[i].pos.y = 0.0f;
+        bots[i].pos.z = spots[i][1];
+        // initial patrol target: a random-ish point inside the room
+        bots[i].target.x = spots[i][0] + (i % 2 ? 6.0f : -6.0f);
+        bots[i].target.z = spots[i][1] + (i % 2 ? -5.0f : 5.0f);
+        bots[i].speed = 1.2f;
+        bots[i].pause = 0.0f;
+    }
+}
+
+static void setBotMsg(const char* fmt, const char* a)
+{
+    snprintf(botMsg, sizeof(botMsg), fmt, a);
+    botMsgTimer = 6.0f;
+}
+
+// talk: closest bot within 3.5 units says something to the player
+static void tryTalk(void)
+{
+    int best = -1;
+    float bestDist = 3.5f * 3.5f;
+    int i;
+    for(i = 0; i < MAX_BOTS; i++){
+        float dx = bots[i].pos.x - cam.pos.x;
+        float dz = bots[i].pos.z - cam.pos.z;
+        float d = dx*dx + dz*dz;
+        if(d < bestDist){ bestDist = d; best = i; }
+    }
+    if(best < 0){
+        setBotMsg("Nobody is close enough to talk. Walk up to a bot!", "");
+        return;
+    }
+    const char* n = bots[best].name;
+    switch(best % 3){
+        case 0:
+            setBotMsg("%s: Hey %s! This Rec Room never closes. Want to build?", n, playerName[0] ? playerName : "guest");
+            break;
+        case 1:
+            setBotMsg("%s: %s, grab a box and make something awesome!", n, playerName[0] ? playerName : "guest");
+            break;
+        default:
+            setBotMsg("%s: Rec Room forever, %s!", n, playerName[0] ? playerName : "guest");
+            break;
+    }
+}
+
+static void updateBots(float dt)
+{
+    int i;
+    for(i = 0; i < MAX_BOTS; i++){
+        Bot* b = &bots[i];
+        if(b->pause > 0.0f){
+            b->pause -= dt;
+            continue;
+        }
+        float dx = b->target.x - b->pos.x;
+        float dz = b->target.z - b->pos.z;
+        float dist = sqrtf(dx*dx + dz*dz);
+        if(dist < 0.15f){
+            // arrived: pick a new target and pause
+            b->pause = 1.2f + (float)(i * 0.4f);
+            b->target.x = (float)((rand() % 37) - 18);
+            b->target.z = (float)((rand() % 37) - 18);
+            if(b->target.x >  24.0f) b->target.x =  24.0f;
+            if(b->target.z >  24.0f) b->target.z =  24.0f;
+            if(b->target.x < -24.0f) b->target.x = -24.0f;
+            if(b->target.z < -24.0f) b->target.z = -24.0f;
+        } else {
+            float inv = b->speed * dt / dist;
+            b->pos.x += dx * inv;
+            b->pos.z += dz * inv;
+        }
+        // keep bot on the floor
+        b->pos.y = 0.0f;
+    }
+    if(botMsgTimer > 0.0f) botMsgTimer -= dt;
+}
+
+// draw a Rec Room style character out of boxes at feet position p
+static void drawBot(const Bot* b)
+{
+    Box part;
+    part.grabbed = false; part.grabHand = -1;
+
+    float x = b->pos.x, y = b->pos.y, z = b->pos.z;
+
+    // legs (dark gray, two boxes)
+    part.color = C2D_Color32(0x45,0x45,0x45,0xFF);
+    part.size.x = 0.13f; part.size.y = 0.42f; part.size.z = 0.14f;
+    part.pos.x = x - 0.13f; part.pos.z = z; part.pos.y = y + 0.34f;
+    addBoxFaces(&part);
+    part.pos.x = x + 0.13f;
+    addBoxFaces(&part);
+
+    // torso (white suit with high collar)
+    part.color = C2D_Color32(0xF2,0xF2,0xF2,0xFF);
+    part.size.x = 0.34f; part.size.y = 0.5f; part.size.z = 0.24f;
+    part.pos.x = x; part.pos.z = z; part.pos.y = y + 0.95f;
+    addBoxFaces(&part);
+
+    // chest plate (darker vertical strip in the middle)
+    part.color = C2D_Color32(0xD8,0xD8,0xD0,0xFF);
+    part.size.x = 0.07f; part.size.y = 0.26f; part.size.z = 0.26f;
+    part.pos.x = x; part.pos.z = z; part.pos.y = y + 1.02f;
+    addBoxFaces(&part);
+
+    // head: OVAL = vertical box + horizontal box (wider than tall)
+    part.color = C2D_Color32(0xE8,0xB0,0x82,0xFF);
+    part.size.x = 0.20f; part.size.y = 0.30f; part.size.z = 0.26f;
+    part.pos.x = x; part.pos.z = z; part.pos.y = y + 1.52f;
+    addBoxFaces(&part);
+    part.size.x = 0.36f; part.size.y = 0.18f; part.size.z = 0.24f;
+    part.pos.y = y + 1.52f;
+    addBoxFaces(&part);
+
+    // hair: brown cap on top with a short fringe (front)
+    part.color = C2D_Color32(0x5E,0x33,0x1A,0xFF);
+    part.size.x = 0.38f; part.size.y = 0.10f; part.size.z = 0.26f;
+    part.pos.x = x; part.pos.z = z; part.pos.y = y + 1.66f;
+    addBoxFaces(&part);
+
+    // eyes: two dark thin lines, like "> <" (closed happy eyes)
+    part.color = C2D_Color32(0x20,0x18,0x12,0xFF);
+    part.size.x = 0.05f; part.size.y = 0.05f; part.size.z = 0.02f;
+    part.pos.x = x - 0.10f; part.pos.z = z + 0.13f; part.pos.y = y + 1.55f;
+    addBoxFaces(&part);
+    part.pos.x = x + 0.10f;
+    addBoxFaces(&part);
+
+    // mouth: short horizontal line
+    part.color = C2D_Color32(0x20,0x18,0x12,0xFF);
+    part.size.x = 0.10f; part.size.y = 0.03f; part.size.z = 0.02f;
+    part.pos.x = x; part.pos.z = z + 0.13f; part.pos.y = y + 1.42f;
+    addBoxFaces(&part);
+
+    // arms: floating gloves (gray) with GREEN cuffs, as in the reference
+    part.color = C2D_Color32(0x75,0x75,0x75,0xFF);
+    part.size.x = 0.13f; part.size.y = 0.16f; part.size.z = 0.13f;
+    part.pos.z = z + 0.05f; part.pos.y = y + 0.98f;
+    part.pos.x = x - 0.44f;
+    addBoxFaces(&part);
+    part.pos.x = x + 0.44f;
+    addBoxFaces(&part);
+
+    // green cuffs on the wrists
+    part.color = C2D_Color32(0x50,0xC8,0x48,0xFF);
+    part.size.x = 0.15f; part.size.y = 0.06f; part.size.z = 0.14f;
+    part.pos.y = y + 0.87f;
+    part.pos.x = x - 0.44f;
+    addBoxFaces(&part);
+    part.pos.x = x + 0.44f;
+    addBoxFaces(&part);
+}
+
+static void buildBotFaces(void)
+{
+    int i;
+    for(i = 0; i < MAX_BOTS; i++)
+        drawBot(&bots[i]);
 }
 
 static void syncHandWithBox(Hand* h)
@@ -321,10 +513,10 @@ static void updatePlayer(float dt)
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
-    // camera follows the PHYSICAL position of the ABXY buttons on 3DS:
-    // X (top) -> look up, B (bottom) -> look down,
+    // camera follows the PHYSICAL position of the ABXY buttons on 3DS.
+    // CONFIRMED on hardware: pitch+ tilts the camera DOWN.
+    // X (top) -> look up = pitch-, B (bottom) -> look down = pitch+,
     // Y (left) -> look left, A (right) -> look right.
-    // NOTE: in this projection pitch+ tilts the camera DOWN, so up = pitch-.
     if(held & KEY_X) cam.pitch  = fmaxf(cam.pitch - 2.5f * dt, -1.4f);
     if(held & KEY_B) cam.pitch  = fminf(cam.pitch + 2.5f * dt,  1.4f);
     if(held & KEY_Y) cam.yaw   -= 2.5f * dt;
@@ -381,6 +573,10 @@ static void initWorld(void)
 
     cam.pos.x = 0.0f; cam.pos.y = 1.3f; cam.pos.z = 12.0f;
     cam.yaw = 0.0f; cam.pitch = 0.0f;
+
+    initBots();
+    botMsg[0] = 0;
+    botMsgTimer = 0.0f;
 }
 
 // ---------------- menu (citro2d) ----------------
@@ -528,15 +724,18 @@ static void drawGameHud(C3D_RenderTarget* bottom)
     drawText("@", 10.0f, 5.0f, 1.0f, clrWhite, false);
     drawText(playerName[0] ? playerName : "guest", 26.0f, 5.0f, 1.0f, clrWhite, false);
 
-    drawText("STICK: walk", 160.0f, 40.0f, 1.0f, clrWhite, true);
-    drawText("L/R + STICK: hands", 160.0f, 65.0f, 1.0f, clrWhite, true);
-    drawText("X: look up   B: look down", 160.0f, 100.0f, 0.8f, clrWhite, true);
-    drawText("Y: look left A: look right", 160.0f, 125.0f, 0.8f, clrWhite, true);
-    drawText("L+R: grab/release", 160.0f, 155.0f, 1.0f, clrWhite, true);
+    drawText("STICK: walk", 160.0f, 32.0f, 1.0f, clrWhite, true);
+    drawText("L/R + STICK: hands", 160.0f, 52.0f, 1.0f, clrWhite, true);
+    drawText("X: look up   B: look down", 160.0f, 80.0f, 0.8f, clrWhite, true);
+    drawText("Y: look left A: look right", 160.0f, 99.0f, 0.8f, clrWhite, true);
+    drawText("L+R: grab   SELECT: talk", 160.0f, 125.0f, 1.0f, clrWhite, true);
     {
         char dbg[64];
-        snprintf(dbg, sizeof(dbg), "v3  yaw:%d pitch:%d", (int)(cam.yaw*57.2958f), (int)(cam.pitch*57.2958f));
-        drawText(dbg, 160.0f, 190.0f, 0.6f, clrWhite, true);
+        snprintf(dbg, sizeof(dbg), "v6  yaw:%d pitch:%d", (int)(cam.yaw*57.2958f), (int)(cam.pitch*57.2958f));
+        drawText(dbg, 160.0f, 148.0f, 0.6f, clrWhite, true);
+    }
+    if(botMsgTimer > 0.0f && botMsg[0]){
+        drawText(botMsg, 160.0f, 168.0f, 0.65f, clrWhite, true);
     }
     drawText("START: back to menu", 160.0f, 220.0f, 0.8f, clrWhite, true);
 }
@@ -551,9 +750,11 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
 
         if(kDown & KEY_START) break;
         if((kDown & KEY_L) && (kDown & KEY_R)) tryGrab();
+        if(kDown & KEY_SELECT) tryTalk();
 
         updatePlayer(1.0f/60.0f);
         updateHands();
+        updateBots(1.0f/60.0f);
         buildWorldFaces();
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
