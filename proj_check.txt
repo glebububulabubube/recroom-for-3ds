@@ -1,0 +1,8 @@
+start  (yaw=0,pitch=0): (200.0, 164.0)
+Y up   (pitch +0.5):    (200.0, 304.3)
+A down (pitch -0.5):    (200.0, 51.3)
+X left (yaw -0.5):      (320.2, 170.1)
+B right(yaw +0.5):      (79.8, 170.1)
+hand L base (right -0.35, up -0.30, fwd 1.1): (130.0, 180.0)
+hand R base (right +0.35, up -0.30, fwd 1.1): (270.0, 180.0)
+hand L reach(right -0.35, up -0.90, fwd 1.4): (145.0, 261.4)
