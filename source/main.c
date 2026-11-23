@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <math.h>
 
 #include <citro2d.h>
@@ -255,9 +256,12 @@ static void initBots(void)
     }
 }
 
-static void setBotMsg(const char* fmt, const char* a)
+static void setBotMsg(const char* fmt, ...)
 {
-    snprintf(botMsg, sizeof(botMsg), fmt, a);
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(botMsg, sizeof(botMsg), fmt, args);
+    va_end(args);
     botMsgTimer = 6.0f;
 }
 
@@ -274,7 +278,7 @@ static void tryTalk(void)
         if(d < bestDist){ bestDist = d; best = i; }
     }
     if(best < 0){
-        setBotMsg("Walk closer to a bot to talk!", "");
+        setBotMsg("Walk closer to a bot to talk!");
         return;
     }
     const char* n = bots[best].name;
@@ -423,8 +427,10 @@ static void updateHands(void)
     hidCircleRead(&pad);
 
     float dx = pad.dx / 156.0f, dy = pad.dy / 156.0f;
-    if(dx > 1.0f) dx = 1.0f; if(dx < -1.0f) dx = -1.0f;
-    if(dy > 1.0f) dy = 1.0f; if(dy < -1.0f) dy = -1.0f;
+    if(dx > 1.0f) dx = 1.0f;
+    if(dx < -1.0f) dx = -1.0f;
+    if(dy > 1.0f) dy = 1.0f;
+    if(dy < -1.0f) dy = -1.0f;
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
@@ -510,8 +516,10 @@ static void updatePlayer(float dt)
     hidCircleRead(&pad);
 
     float dx = pad.dx / 156.0f, dy = pad.dy / 156.0f;
-    if(dx > 1.0f) dx = 1.0f; if(dx < -1.0f) dx = -1.0f;
-    if(dy > 1.0f) dy = 1.0f; if(dy < -1.0f) dy = -1.0f;
+    if(dx > 1.0f) dx = 1.0f;
+    if(dx < -1.0f) dx = -1.0f;
+    if(dy > 1.0f) dy = 1.0f;
+    if(dy < -1.0f) dy = -1.0f;
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
