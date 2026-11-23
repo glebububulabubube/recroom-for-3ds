@@ -87,6 +87,8 @@ typedef struct {
 static Face faces[MAX_FACES];
 static int faceCount = 0;
 
+static void buildBotFaces(void); // forward decl: called from buildWorldFaces
+
 static int cmpFaces(const void* a, const void* b)
 {
     float d = ((const Face*)b)->depth - ((const Face*)a)->depth;
@@ -272,19 +274,20 @@ static void tryTalk(void)
         if(d < bestDist){ bestDist = d; best = i; }
     }
     if(best < 0){
-        setBotMsg("Nobody is close enough to talk. Walk up to a bot!", "");
+        setBotMsg("Walk closer to a bot to talk!", "");
         return;
     }
     const char* n = bots[best].name;
+    const char* p = playerName[0] ? playerName : "guest";
     switch(best % 3){
         case 0:
-            setBotMsg("%s: Hey %s! This Rec Room never closes. Want to build?", n, playerName[0] ? playerName : "guest");
+            setBotMsg("%s: Hi %s, let's build!", n, p);
             break;
         case 1:
-            setBotMsg("%s: %s, grab a box and make something awesome!", n, playerName[0] ? playerName : "guest");
+            setBotMsg("%s: Grab a box, %s!", n, p);
             break;
         default:
-            setBotMsg("%s: Rec Room forever, %s!", n, playerName[0] ? playerName : "guest");
+            setBotMsg("%s: Rec Room forever, %s!", n, p);
             break;
     }
 }
@@ -478,7 +481,6 @@ static void tryGrab(void)
     // find nearest box to either hand, within reach
     float best = 1.4f * 1.4f;
     int bestIdx = -1;
-    Vec3 bestHand;
     bool bestIsLeft = false;
     int i;
     for(i = 0; i < MAX_BOXES; i++){
@@ -488,8 +490,8 @@ static void tryGrab(void)
         Vec3 dR = { b->pos.x - handR.world.x, b->pos.y - handR.world.y, b->pos.z - handR.world.z };
         float distL = dL.x*dL.x + dL.y*dL.y + dL.z*dL.z;
         float distR = dR.x*dR.x + dR.y*dR.y + dR.z*dR.z;
-        if(distL < best){ best = distL; bestIdx = i; bestHand = handL.world; bestIsLeft = true; }
-        if(distR < best){ best = distR; bestIdx = i; bestHand = handR.world; bestIsLeft = false; }
+        if(distL < best){ best = distL; bestIdx = i; bestIsLeft = true; }
+        if(distR < best){ best = distR; bestIdx = i; bestIsLeft = false; }
     }
     if(bestIdx >= 0){
         grabbedBox = bestIdx;
