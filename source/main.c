@@ -85,9 +85,10 @@ typedef struct {
     float depth;
     float x0,y0,x1,y1,x2,y2,x3,y3;
     u32 color;
+    bool tri; // true: only 3 verts (x0..x2), no 4th vertex
 } Face;
 
-#define MAX_FACES 7600
+#define MAX_FACES 1800
 static Face faces[MAX_FACES];
 static int faceCount = 0;
 
@@ -100,11 +101,19 @@ static int cmpFaces(const void* a, const void* b)
 }
 
 // camera-space projection; returns 0 if behind camera
+static float gRYaw, gSYaw, gRPitch, gSPitch; // cached camera trig (set per frame)
+
+static void updateCameraBasis(void)
+{
+    gRYaw = cosf(cam.yaw);   gSYaw = sinf(cam.yaw);
+    gRPitch = cosf(cam.pitch); gSPitch = sinf(cam.pitch);
+}
+
 static int project(float x, float y, float z, float* sx, float* sy, float* czOut)
 {
     float rx = x - cam.pos.x, ry = y - cam.pos.y, rz = z - cam.pos.z;
-    float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
-    float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
+    float cY = gRYaw, sY = gSYaw;
+    float cP = gRPitch, sP = gSPitch;
 
     float R[3] = { cY, 0.0f, -sY };
     float U[3] = { sY*sP, -cP, cY*sP };
@@ -141,10 +150,55 @@ static void addFace(const Vec3* v, u32 color, float brightness)
         (u8)((color >>  8) & 0xFF) * brightness,
         (u8)((color >> 16) & 0xFF) * brightness,
         0xFF);
+    f->tri = (v[3].x == v[2].x && v[3].y == v[2].y && v[3].z == v[2].z);
+}
+
+// add a single triangle (used by glb models) - one draw call, not two.
+// cull: skips triangles whose normal points away from the camera (view-space).
+static void addTriFaceCull(const Vec3* v, u32 color, bool cull, bool flipWinding)
+{
+    if(faceCount >= MAX_FACES) return;
+
+    // backface cull in world space: normal vs view vector to tri center
+    if(cull){
+        float ax=v[0].x, ay=v[0].y, az=v[0].z;
+        float bx=v[1].x, by=v[1].y, bz=v[1].z;
+        float cx=v[2].x, cy=v[2].y, cz=v[2].z;
+        float ux=bx-ax, uy=by-ay, uz=bz-az;
+        float vx=cx-ax, vy=cy-ay, vz=cz-az;
+        float nx = uy*vz - uz*vy;
+        float ny = uz*vx - ux*vz;
+        float nz = ux*vy - uy*vx;
+        float mx = (ax+bx+cx)/3.0f - cam.pos.x;
+        float my = (ay+by+cy)/3.0f - cam.pos.y;
+        float mz = (az+bz+cz)/3.0f - cam.pos.z;
+        float dot = nx*mx + ny*my + nz*mz;
+        if(flipWinding) dot = -dot;
+        if(dot >= 0.0f) return; // facing away (or edge-on)
+    }
+
+    float x0,y0,x1,y1,x2,y2;
+    float d0,d1,d2;
+    if(!project(v[0].x, v[0].y, v[0].z, &x0,&y0,&d0)) return;
+    if(!project(v[1].x, v[1].y, v[1].z, &x1,&y1,&d1)) return;
+    if(!project(v[2].x, v[2].y, v[2].z, &x2,&y2,&d2)) return;
+
+    Face* f = &faces[faceCount++];
+    f->depth   = (d0+d1+d2)/3.0f;
+    f->x0=x0; f->y0=y0; f->x1=x1; f->y1=y1;
+    f->x2=x2; f->y2=y2;
+    f->color = color;
+    f->tri = true;
 }
 
 static void drawFaceQuad(const Face* f)
 {
+    if(f->tri){
+        C2D_DrawTriangle(f->x0,f->y0,f->color,
+                         f->x1,f->y1,f->color,
+                         f->x2,f->y2,f->color, 0.5f);
+        return;
+    }
     C2D_DrawTriangle(f->x0,f->y0,f->color,
                      f->x1,f->y1,f->color,
                      f->x2,f->y2,f->color, 0.5f);
@@ -195,27 +249,27 @@ static void addHandFaces(const Box* h, int handPart)
     const float S = 0.45f; // glove is ~1m tall in the GLB; shrink to hand size
     u32 col = C2D_Color32((u8)(part->r*255.0f), (u8)(part->g*255.0f), (u8)(part->b*255.0f), 0xFF);
 
-    float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
+    float cY = gRYaw, sY = gSYaw;
     float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
     float R[3] = { cY, 0.0f, -sY };
     float U[3] = { sY*sP, -cP, cY*sP };
     float F[3] = { sY*cP, sP, cY*cP };
 
     int i;
-    for(i = 0; i < part->faceCount * 15; i += 15){
-        Vec3 v[4];
+    for(i = 0; i < part->faceCount * 9; i += 9){
+        Vec3 v[3];
         int vi;
         for(vi = 0; vi < 3; vi++){
-            float lx = part->data[i + vi*5 + 0] * S;
-            float ly = part->data[i + vi*5 + 1] * S;
-            float lz = part->data[i + vi*5 + 2] * S;
+            float lx = part->data[i + vi*3 + 0] * S;
+            float ly = part->data[i + vi*3 + 1] * S;
+            float lz = part->data[i + vi*3 + 2] * S;
             // local model axes -> camera axes: x->R, y->U, z->F
             v[vi].x = lx*R[0] + ly*U[0] + lz*F[0] + h->pos.x;
             v[vi].y = lx*R[1] + ly*U[1] + lz*F[1] + h->pos.y;
             v[vi].z = lx*R[2] + ly*U[2] + lz*F[2] + h->pos.z;
         }
-        v[3] = v[2];
-        addFace(v, col, 1.0f);
+        // left hand (part 1) is mirrored on X, which flips the winding
+        addTriFaceCull(v, col, true, handPart == 1);
     }
 }
 
@@ -357,6 +411,23 @@ static void updateBots(float dt)
     if(botMsgTimer > 0.0f) botMsgTimer -= dt;
 }
 
+// draw a small flat feature (eye/mouth) on the head, model-local coords,
+// rotated with the bot heading like the rest of the avatar.
+static void addFaceFeature(float cx, float cy, float hx, float hy, float fz,
+                           const Bot* b, float ca, float sa)
+{
+    Vec3 q[4];
+    float lx[4] = { cx-hx, cx+hx, cx+hx, cx-hx };
+    float ly[4] = { cy-hy, cy-hy, cy+hy, cy+hy };
+    int k;
+    for(k = 0; k < 4; k++){
+        q[k].x = lx[k]*ca - fz*sa + b->pos.x;
+        q[k].y = ly[k] + b->pos.y;
+        q[k].z = lx[k]*sa + fz*ca + b->pos.z;
+    }
+    addFace(q, C2D_Color32(0x18,0x10,0x0A,0xFF), 1.0f);
+}
+
 // render the real Rec Room avatar (from player_model.h) at feet position p
 static void drawBot(const Bot* b)
 {
@@ -371,21 +442,27 @@ static void drawBot(const Bot* b)
         const PM_Part* part = &PM_PARTS[pn];
         u32 col = C2D_Color32((u8)(part->r*255.0f), (u8)(part->g*255.0f), (u8)(part->b*255.0f), 0xFF);
         int i;
-        for(i = 0; i < part->faceCount * 15; i += 15){
-            Vec3 v[4]; // quad with last vertex = 3rd (degenerate)
+        for(i = 0; i < part->faceCount * 9; i += 9){
+            Vec3 v[3];
             int vi;
             for(vi = 0; vi < 3; vi++){
-                float lx = part->data[i + vi*5 + 0];
-                float ly = part->data[i + vi*5 + 1];
-                float lz = part->data[i + vi*5 + 2];
+                float lx = part->data[i + vi*3 + 0];
+                float ly = part->data[i + vi*3 + 1];
+                float lz = part->data[i + vi*3 + 2];
                 v[vi].x = lx*ca - lz*sa + b->pos.x;
                 v[vi].y = ly + b->pos.y;
                 v[vi].z = lx*sa + lz*ca + b->pos.z;
             }
-            v[3] = v[2];
-            addFace(v, col, 1.0f);
+            // part 0 (hair) is an open shell - draw both sides; parts 1/3 are solid
+            addTriFaceCull(v, col, (pn == 1 || pn == 3), false);
         }
     }
+
+    // guarantee visible features: two eyes + smile on the head
+    float fz = 0.160f;                      // face plane: beyond skin surface (max z=0.138)
+    addFaceFeature(-0.045f, 1.55f, 0.030f, 0.035f, fz, b, ca, sa); // left eye
+    addFaceFeature( 0.045f, 1.55f, 0.030f, 0.035f, fz, b, ca, sa); // right eye
+    addFaceFeature( 0.000f, 1.46f, 0.030f, 0.008f, fz, b, ca, sa); // smile
 }
 
 static void buildBotFaces(void)
@@ -418,8 +495,8 @@ static void updateHands(void)
     if(fabsf(dx) < 0.15f) dx = 0.0f;
     if(fabsf(dy) < 0.15f) dy = 0.0f;
 
-    float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
-    float cP = cosf(cam.pitch), sP = sinf(cam.pitch);
+    float cY = gRYaw, sY = gSYaw;
+    float cP = gRPitch, sP = gSPitch;
     float R[3] = { cY, 0.0f, -sY };
     float U[3] = { sY*sP, -cP, cY*sP };
     float F[3] = { sY*cP, sP, cY*cP };
@@ -518,7 +595,7 @@ static void updatePlayer(float dt)
 
     // walking only when hands are not moving (L/R not held)
     if(!(held & (KEY_L | KEY_R))){
-        float cY = cosf(cam.yaw), sY = sinf(cam.yaw);
+        float cY = gRYaw, sY = gSYaw;
         float speed = 5.0f * dt;
         cam.pos.x += (cY*dx + sY*dy) * speed;
         cam.pos.z += (-sY*dx + cY*dy) * speed;
@@ -749,6 +826,7 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
         updatePlayer(1.0f/60.0f);
         updateHands();
         updateBots(1.0f/60.0f);
+        updateCameraBasis();
         buildWorldFaces();
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
@@ -768,8 +846,8 @@ int main(void)
     gfxInitDefault();
     initColors();
 
-    C3D_Init(0x400000); // 4 MB command buffer: ~14k draw calls/frame + world
-    C2D_Init(50000);    // vertex buffer: 7600 faces * 6 verts + HUD text
+    C3D_Init(0x400000); // 4 MB command buffer: ~1800 faces/frame + world
+    C2D_Init(14000);    // vertex buffer: 1800 faces * 6 verts + HUD text
     C2D_Prepare();
 
     C3D_RenderTarget* top    = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
