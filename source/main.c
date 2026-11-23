@@ -240,6 +240,71 @@ static void addBoxFaces(const Box* b)
     addFace(tmp, b->color, 0.7f);
 }
 
+// ---------------- personal dorm room (built from boxes) ----------------
+
+typedef struct {
+    Vec3 pos;
+    Vec3 size;
+    u32  color;
+} RoomBox;
+
+static void addRoomBox(const RoomBox* r)
+{
+    Box b;
+    b.pos = r->pos; b.size = r->size; b.color = r->color;
+    b.grabbed = false; b.grabHand = -1;
+    addBoxFaces(&b);
+}
+
+// Furniture layout follows the DormRoom v1 model: bed in the back-left,
+// dresser back-right, desk+chair right, plants/corner left, whiteboard,
+// mirror, posters, hoop. ~40 boxes, cheap for the 3DS.
+static const RoomBox ROOMFURN[] = {
+    // bed: frame, mattress, pillow, blanket, headboard
+    { {-3.4f, 0.55f, -2.4f}, {1.5f, 0.55f, 1.0f},  C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
+    { {-3.4f, 0.93f, -2.4f}, {1.35f, 0.16f, 0.85f}, C2D_Color32(0xF2,0xF2,0xF2,0xFF) },
+    { {-4.02f, 1.05f, -2.4f}, {0.42f, 0.14f, 0.6f},  C2D_Color32(0xFF,0xFF,0xFF,0xFF) },
+    { {-2.98f, 1.02f, -2.4f}, {0.7f, 0.12f, 0.8f},   C2D_Color32(0xE8,0x7A,0x3C,0xFF) },
+    { {-4.15f, 0.9f, -2.4f}, {0.08f, 1.0f, 0.95f},   C2D_Color32(0x5E,0x40,0x30,0xFF) },
+    // dresser back-right
+    { {4.3f, 0.75f, -2.8f}, {1.0f, 1.5f, 0.55f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
+    { {4.3f, 1.53f, -2.8f}, {1.05f, 0.06f, 0.6f},    C2D_Color32(0xC8,0x9A,0x6A,0xFF) },
+    // desk + lamp + chair (right side)
+    { {3.6f, 0.8f, 0.5f},  {1.4f, 0.1f, 0.8f},       C2D_Color32(0xC8,0x9A,0x6A,0xFF) },
+    { {3.6f, 0.4f, 0.5f},  {0.55f, 0.7f, 0.45f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
+    { {3.05f, 1.15f, 0.5f}, {0.16f, 0.4f, 0.16f},    C2D_Color32(0x4A,0x4A,0x4A,0xFF) },
+    { {3.05f, 1.38f, 0.5f}, {0.34f, 0.14f, 0.34f},   C2D_Color32(0xFF,0xE8,0xA0,0xFF) },
+    { {2.75f, 0.55f, 1.25f}, {0.5f, 0.5f, 0.5f},     C2D_Color32(0xA8,0xA0,0x90,0xFF) },
+    { {2.75f, 1.15f, 1.5f}, {0.5f, 0.8f, 0.08f},     C2D_Color32(0xA8,0xA0,0x90,0xFF) },
+    // rugs
+    { {0.0f, 0.02f, 0.2f}, {3.2f, 0.05f, 2.2f},      C2D_Color32(0x33,0x50,0x7A,0xFF) },
+    { {-2.6f, 0.02f, 3.0f}, {0.8f, 0.05f, 0.6f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
+    // whiteboard + mirror on back wall
+    { {2.2f, 2.5f, -3.56f}, {1.5f, 0.95f, 0.1f},     C2D_Color32(0xE8,0xEC,0xE8,0xFF) },
+    { {-2.0f, 2.5f, -3.56f}, {0.6f, 1.4f, 0.1f},     C2D_Color32(0xC8,0xE0,0xF0,0xFF) },
+    // posters on side walls
+    { {-5.44f, 2.4f, 1.0f}, {0.1f, 0.8f, 0.6f},      C2D_Color32(0xE8,0x6A,0x1F,0xFF) },
+    { {5.44f, 2.4f, -0.5f}, {0.1f, 0.8f, 0.6f},      C2D_Color32(0x2A,0x5A,0x9A,0xFF) },
+    // shelf + books (left wall)
+    { {-5.42f, 2.1f, 2.6f}, {0.1f, 0.08f, 1.2f},     C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
+    { {-5.34f, 2.17f, 2.1f}, {0.06f, 0.22f, 0.32f},  C2D_Color32(0xD8,0x40,0x40,0xFF) },
+    { {-5.34f, 2.17f, 2.45f}, {0.06f, 0.22f, 0.28f}, C2D_Color32(0x3A,0x7A,0x3C,0xFF) },
+    { {-5.34f, 2.17f, 2.8f}, {0.06f, 0.2f, 0.3f},    C2D_Color32(0x2A,0x5A,0x9A,0xFF) },
+    // window (right of door) + door on front wall
+    { {3.4f, 2.1f, 3.56f}, {1.2f, 0.8f, 0.1f},       C2D_Color32(0x9B,0xD8,0xF0,0xFF) },
+    { {3.4f, 1.66f, 3.56f}, {1.3f, 0.1f, 0.12f},     C2D_Color32(0xF8,0xF4,0xEC,0xFF) },
+    { {0.0f, 1.2f, 3.56f}, {1.0f, 2.4f, 0.15f},      C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
+    { {0.3f, 1.3f, 3.65f}, {0.08f, 0.12f, 0.05f},    C2D_Color32(0xE8,0xC8,0x60,0xFF) },
+    // ceiling light
+    { {0.0f, 3.93f, 0.0f}, {2.0f, 0.12f, 1.2f},      C2D_Color32(0xFF,0xFF,0xFF,0xFF) },
+    // plant corner, trash, hoop + ball
+    { {-4.6f, 0.35f, 2.8f}, {0.35f, 0.55f, 0.35f},   C2D_Color32(0x7A,0x4A,0x2A,0xFF) },
+    { {-4.6f, 1.15f, 2.8f}, {0.7f, 0.85f, 0.7f},     C2D_Color32(0x4E,0x9A,0x3C,0xFF) },
+    { {4.7f, 0.35f, 1.6f}, {0.35f, 0.7f, 0.35f},     C2D_Color32(0x90,0x90,0x90,0xFF) },
+    { {5.4f, 3.0f, -0.6f}, {0.1f, 0.32f, 0.32f},     C2D_Color32(0xE8,0x6A,0x1F,0xFF) },
+    { {5.0f, 0.28f, -1.6f}, {0.28f, 0.28f, 0.28f},   C2D_Color32(0xE8,0x7A,0x2C,0xFF) },
+};
+
 // add a real Rec Room glove model (hand_model.h) at hand position/orientation.
 // handPart: 0 = right glove (as authored), 1 = left glove (mirrored on X).
 // The glove is oriented by the camera basis so it tracks the player's view.
@@ -280,21 +345,36 @@ static void buildWorldFaces(void)
     // floor
     {
         Vec3 f[4] = {
-            {-30.0f, 0.0f, -30.0f}, { 30.0f, 0.0f, -30.0f},
-            { 30.0f, 0.0f,  30.0f}, {-30.0f, 0.0f,  30.0f}
+            {-5.5f, 0.0f, -3.7f}, { 5.5f, 0.0f, -3.7f},
+            { 5.5f, 0.0f,  3.7f}, {-5.5f, 0.0f,  3.7f}
         };
-        addFace(f, C2D_Color32(0xE8,0x5A,0x00,0xFF), 1.0f);
+        addFace(f, C2D_Color32(0xB8,0x9A,0x6E,0xFF), 1.0f);
     }
-    // walls
+    // walls (wood-style, dorm room)
     {
-        Vec3 w1[4] = {{-30,0,-30},{-30,0,30},{-30,5,30},{-30,5,-30}};
-        addFace(w1, C2D_Color32(0xC8,0x48,0x00,0xFF), 1.0f);
-        Vec3 w2[4] = {{30,0,-30},{30,0,30},{30,5,30},{30,5,-30}};
-        addFace(w2, C2D_Color32(0xC8,0x48,0x00,0xFF), 0.8f);
-        Vec3 w3[4] = {{-30,0,-30},{30,0,-30},{30,5,-30},{-30,5,-30}};
-        addFace(w3, C2D_Color32(0xC8,0x48,0x00,0xFF), 0.9f);
-        Vec3 w4[4] = {{-30,0,30},{30,0,30},{30,5,30},{-30,5,30}};
-        addFace(w4, C2D_Color32(0xC8,0x48,0x00,0xFF), 0.95f);
+        Vec3 w1[4] = {{-5.5,0,-3.7},{-5.5,0,3.7},{-5.5,4,3.7},{-5.5,4,-3.7}};
+        addFace(w1, C2D_Color32(0x9A,0x7E,0x5E,0xFF), 1.0f);
+        Vec3 w2[4] = {{5.5,0,-3.7},{5.5,0,3.7},{5.5,4,3.7},{5.5,4,-3.7}};
+        addFace(w2, C2D_Color32(0x9A,0x7E,0x5E,0xFF), 0.8f);
+        Vec3 w3[4] = {{-5.5,0,-3.7},{5.5,0,-3.7},{5.5,4,-3.7},{-5.5,4,-3.7}};
+        addFace(w3, C2D_Color32(0x9A,0x7E,0x5E,0xFF), 0.9f);
+        Vec3 w4[4] = {{-5.5,0,3.7},{5.5,0,3.7},{5.5,4,3.7},{-5.5,4,3.7}};
+        addFace(w4, C2D_Color32(0x9A,0x7E,0x5E,0xFF), 0.95f);
+    }
+    // ceiling
+    {
+        Vec3 c[4] = {
+            {-5.5f, 4.0f, -3.7f}, { 5.5f, 4.0f, -3.7f},
+            { 5.5f, 4.0f,  3.7f}, {-5.5f, 4.0f,  3.7f}
+        };
+        addFace(c, C2D_Color32(0xE8,0xE0,0xD0,0xFF), 0.8f);
+    }
+
+    // furniture
+    {
+        unsigned int k;
+        for(k = 0; k < sizeof(ROOMFURN)/sizeof(ROOMFURN[0]); k++)
+            addRoomBox(&ROOMFURN[k]);
     }
 
     int i;
@@ -330,11 +410,11 @@ static void initBots(void)
 {
     memset(&bots[0], 0, sizeof(Bot));
     strncpy(bots[0].name, "Emperor", 15);
-    bots[0].pos.x = 0.0f;
+    bots[0].pos.x = 1.2f;
     bots[0].pos.y = 0.0f;
-    bots[0].pos.z = -4.0f;
-    bots[0].target.x = 6.0f;
-    bots[0].target.z = -4.0f;
+    bots[0].pos.z = -1.5f;
+    bots[0].target.x = -0.8f;
+    bots[0].target.z = -2.2f;
     bots[0].speed = 1.2f;
     bots[0].pause = 0.0f;
 }
@@ -392,14 +472,14 @@ static void updateBots(float dt)
         float dz = b->target.z - b->pos.z;
         float dist = sqrtf(dx*dx + dz*dz);
         if(dist < 0.15f){
-            // arrived: pick a new target and pause
+            // arrived: pick a new target and pause (inside the dorm room)
             b->pause = 1.2f + (float)(i * 0.4f);
-            b->target.x = (float)((rand() % 37) - 18);
-            b->target.z = (float)((rand() % 37) - 18);
-            if(b->target.x >  24.0f) b->target.x =  24.0f;
-            if(b->target.z >  24.0f) b->target.z =  24.0f;
-            if(b->target.x < -24.0f) b->target.x = -24.0f;
-            if(b->target.z < -24.0f) b->target.z = -24.0f;
+            b->target.x = ((float)(rand() % 90) - 45.0f) / 10.0f;
+            b->target.z = ((float)(rand() % 60) - 30.0f) / 10.0f;
+            if(b->target.x >  4.0f) b->target.x =  4.0f;
+            if(b->target.z >  2.8f) b->target.z =  2.8f;
+            if(b->target.x < -4.0f) b->target.x = -4.0f;
+            if(b->target.z < -2.8f) b->target.z = -2.8f;
         } else {
             float inv = b->speed * dt / dist;
             b->pos.x += dx * inv;
@@ -602,19 +682,20 @@ static void updatePlayer(float dt)
     }
 
     // clamp inside room
-    if(cam.pos.x < -26.0f) cam.pos.x = -26.0f;
-    if(cam.pos.x >  26.0f) cam.pos.x =  26.0f;
-    if(cam.pos.z < -26.0f) cam.pos.z = -26.0f;
-    if(cam.pos.z >  26.0f) cam.pos.z =  26.0f;
+    if(cam.pos.x < -5.0f) cam.pos.x = -5.0f;
+    if(cam.pos.x >  5.0f) cam.pos.x =  5.0f;
+    if(cam.pos.z < -3.3f) cam.pos.z = -3.3f;
+    if(cam.pos.z >  3.3f) cam.pos.z =  3.3f;
     cam.pos.y = 1.3f;
 }
 
 static void initWorld(void)
 {
-    // spread boxes around the room
+    // a few colorful grab boxes on the rug in the middle of the room
     static const float coords[8][3] = {
-        { -5, 0.4f, -5 }, { 5, 0.8f, -6 }, { -6, 0.3f, 4 }, { 4, 1.0f, 5 },
-        { 0, 0.5f, 0 }, { -4, 0.7f, -1 }, { 6, 0.5f, 1 }, { -2, 0.6f, 7 }
+        { -1.5f, 0.4f, 1.5f }, { 0.0f, 0.8f, 1.5f }, { 1.5f, 0.3f, 0.8f },
+        { 2.0f, 1.0f, -1.2f }, { -1.5f, 0.5f, 0.3f }, { 1.0f, 0.7f, -2.0f },
+        { -2.0f, 0.5f, -1.0f }, { 0.5f, 0.6f, 2.5f }
     };
     int i;
     for(i = 0; i < MAX_BOXES; i++){
@@ -642,8 +723,8 @@ static void initWorld(void)
     handR.grabIdx = -1;
     grabbedBox = -1;
 
-    cam.pos.x = 0.0f; cam.pos.y = 1.3f; cam.pos.z = 12.0f;
-    cam.yaw = 0.0f; cam.pitch = 0.0f;
+    cam.pos.x = 0.0f; cam.pos.y = 1.3f; cam.pos.z = 0.0f;
+    cam.yaw = 3.14159f; cam.pitch = 0.0f;
 
     initBots();
     botMsg[0] = 0;
