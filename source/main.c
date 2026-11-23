@@ -259,50 +259,52 @@ static void addRoomBox(const RoomBox* r)
 // Furniture layout follows the DormRoom v1 model: bed in the back-left,
 // dresser back-right, desk+chair right, plants/corner left, whiteboard,
 // mirror, posters, hoop. ~40 boxes, cheap for the 3DS.
+// Colors are plain u32 literals (0xAABBGGRR, packed like C2D_Color32 does) so
+// this static array stays a compile-time constant initializer.
 static const RoomBox ROOMFURN[] = {
     // bed: frame, mattress, pillow, blanket, headboard
-    { {-3.4f, 0.55f, -2.4f}, {1.5f, 0.55f, 1.0f},  C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
-    { {-3.4f, 0.93f, -2.4f}, {1.35f, 0.16f, 0.85f}, C2D_Color32(0xF2,0xF2,0xF2,0xFF) },
-    { {-4.02f, 1.05f, -2.4f}, {0.42f, 0.14f, 0.6f},  C2D_Color32(0xFF,0xFF,0xFF,0xFF) },
-    { {-2.98f, 1.02f, -2.4f}, {0.7f, 0.12f, 0.8f},   C2D_Color32(0xE8,0x7A,0x3C,0xFF) },
-    { {-4.15f, 0.9f, -2.4f}, {0.08f, 1.0f, 0.95f},   C2D_Color32(0x5E,0x40,0x30,0xFF) },
+    { {-3.4f, 0.55f, -2.4f}, {1.5f, 0.55f, 1.0f},  0xFF2F4A6B },
+    { {-3.4f, 0.93f, -2.4f}, {1.35f, 0.16f, 0.85f}, 0xFFF2F2F2 },
+    { {-4.02f, 1.05f, -2.4f}, {0.42f, 0.14f, 0.6f},  0xFFFFFFFF },
+    { {-2.98f, 1.02f, -2.4f}, {0.7f, 0.12f, 0.8f},   0xFF3C7AE8 },
+    { {-4.15f, 0.9f, -2.4f}, {0.08f, 1.0f, 0.95f},   0xFF30405E },
     // dresser back-right
-    { {4.3f, 0.75f, -2.8f}, {1.0f, 1.5f, 0.55f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
-    { {4.3f, 1.53f, -2.8f}, {1.05f, 0.06f, 0.6f},    C2D_Color32(0xC8,0x9A,0x6A,0xFF) },
+    { {4.3f, 0.75f, -2.8f}, {1.0f, 1.5f, 0.55f},     0xFF4E6B8A },
+    { {4.3f, 1.53f, -2.8f}, {1.05f, 0.06f, 0.6f},    0xFF6A9AC8 },
     // desk + lamp + chair (right side)
-    { {3.6f, 0.8f, 0.5f},  {1.4f, 0.1f, 0.8f},       C2D_Color32(0xC8,0x9A,0x6A,0xFF) },
-    { {3.6f, 0.4f, 0.5f},  {0.55f, 0.7f, 0.45f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
-    { {3.05f, 1.15f, 0.5f}, {0.16f, 0.4f, 0.16f},    C2D_Color32(0x4A,0x4A,0x4A,0xFF) },
-    { {3.05f, 1.38f, 0.5f}, {0.34f, 0.14f, 0.34f},   C2D_Color32(0xFF,0xE8,0xA0,0xFF) },
-    { {2.75f, 0.55f, 1.25f}, {0.5f, 0.5f, 0.5f},     C2D_Color32(0xA8,0xA0,0x90,0xFF) },
-    { {2.75f, 1.15f, 1.5f}, {0.5f, 0.8f, 0.08f},     C2D_Color32(0xA8,0xA0,0x90,0xFF) },
+    { {3.6f, 0.8f, 0.5f},  {1.4f, 0.1f, 0.8f},       0xFF6A9AC8 },
+    { {3.6f, 0.4f, 0.5f},  {0.55f, 0.7f, 0.45f},     0xFF4E6B8A },
+    { {3.05f, 1.15f, 0.5f}, {0.16f, 0.4f, 0.16f},    0xFF4A4A4A },
+    { {3.05f, 1.38f, 0.5f}, {0.34f, 0.14f, 0.34f},   0xFFA0E8FF },
+    { {2.75f, 0.55f, 1.25f}, {0.5f, 0.5f, 0.5f},     0xFF90A0A8 },
+    { {2.75f, 1.15f, 1.5f}, {0.5f, 0.8f, 0.08f},     0xFF90A0A8 },
     // rugs
-    { {0.0f, 0.02f, 0.2f}, {3.2f, 0.05f, 2.2f},      C2D_Color32(0x33,0x50,0x7A,0xFF) },
-    { {-2.6f, 0.02f, 3.0f}, {0.8f, 0.05f, 0.6f},     C2D_Color32(0x8A,0x6B,0x4E,0xFF) },
+    { {0.0f, 0.02f, 0.2f}, {3.2f, 0.05f, 2.2f},      0xFF7A5033 },
+    { {-2.6f, 0.02f, 3.0f}, {0.8f, 0.05f, 0.6f},     0xFF4E6B8A },
     // whiteboard + mirror on back wall
-    { {2.2f, 2.5f, -3.56f}, {1.5f, 0.95f, 0.1f},     C2D_Color32(0xE8,0xEC,0xE8,0xFF) },
-    { {-2.0f, 2.5f, -3.56f}, {0.6f, 1.4f, 0.1f},     C2D_Color32(0xC8,0xE0,0xF0,0xFF) },
+    { {2.2f, 2.5f, -3.56f}, {1.5f, 0.95f, 0.1f},     0xFFE8ECE8 },
+    { {-2.0f, 2.5f, -3.56f}, {0.6f, 1.4f, 0.1f},     0xFFF0E0C8 },
     // posters on side walls
-    { {-5.44f, 2.4f, 1.0f}, {0.1f, 0.8f, 0.6f},      C2D_Color32(0xE8,0x6A,0x1F,0xFF) },
-    { {5.44f, 2.4f, -0.5f}, {0.1f, 0.8f, 0.6f},      C2D_Color32(0x2A,0x5A,0x9A,0xFF) },
+    { {-5.44f, 2.4f, 1.0f}, {0.1f, 0.8f, 0.6f},      0xFF1F6AE8 },
+    { {5.44f, 2.4f, -0.5f}, {0.1f, 0.8f, 0.6f},      0xFF9A5A2A },
     // shelf + books (left wall)
-    { {-5.42f, 2.1f, 2.6f}, {0.1f, 0.08f, 1.2f},     C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
-    { {-5.34f, 2.17f, 2.1f}, {0.06f, 0.22f, 0.32f},  C2D_Color32(0xD8,0x40,0x40,0xFF) },
-    { {-5.34f, 2.17f, 2.45f}, {0.06f, 0.22f, 0.28f}, C2D_Color32(0x3A,0x7A,0x3C,0xFF) },
-    { {-5.34f, 2.17f, 2.8f}, {0.06f, 0.2f, 0.3f},    C2D_Color32(0x2A,0x5A,0x9A,0xFF) },
+    { {-5.42f, 2.1f, 2.6f}, {0.1f, 0.08f, 1.2f},     0xFF2F4A6B },
+    { {-5.34f, 2.17f, 2.1f}, {0.06f, 0.22f, 0.32f},  0xFF4040D8 },
+    { {-5.34f, 2.17f, 2.45f}, {0.06f, 0.22f, 0.28f}, 0xFF3C7A3A },
+    { {-5.34f, 2.17f, 2.8f}, {0.06f, 0.2f, 0.3f},    0xFF9A5A2A },
     // window (right of door) + door on front wall
-    { {3.4f, 2.1f, 3.56f}, {1.2f, 0.8f, 0.1f},       C2D_Color32(0x9B,0xD8,0xF0,0xFF) },
-    { {3.4f, 1.66f, 3.56f}, {1.3f, 0.1f, 0.12f},     C2D_Color32(0xF8,0xF4,0xEC,0xFF) },
-    { {0.0f, 1.2f, 3.56f}, {1.0f, 2.4f, 0.15f},      C2D_Color32(0x6B,0x4A,0x2F,0xFF) },
-    { {0.3f, 1.3f, 3.65f}, {0.08f, 0.12f, 0.05f},    C2D_Color32(0xE8,0xC8,0x60,0xFF) },
+    { {3.4f, 2.1f, 3.56f}, {1.2f, 0.8f, 0.1f},       0xFFF0D89B },
+    { {3.4f, 1.66f, 3.56f}, {1.3f, 0.1f, 0.12f},     0xFFECF4F8 },
+    { {0.0f, 1.2f, 3.56f}, {1.0f, 2.4f, 0.15f},      0xFF2F4A6B },
+    { {0.3f, 1.3f, 3.65f}, {0.08f, 0.12f, 0.05f},    0xFF60C8E8 },
     // ceiling light
-    { {0.0f, 3.93f, 0.0f}, {2.0f, 0.12f, 1.2f},      C2D_Color32(0xFF,0xFF,0xFF,0xFF) },
+    { {0.0f, 3.93f, 0.0f}, {2.0f, 0.12f, 1.2f},      0xFFFFFFFF },
     // plant corner, trash, hoop + ball
-    { {-4.6f, 0.35f, 2.8f}, {0.35f, 0.55f, 0.35f},   C2D_Color32(0x7A,0x4A,0x2A,0xFF) },
-    { {-4.6f, 1.15f, 2.8f}, {0.7f, 0.85f, 0.7f},     C2D_Color32(0x4E,0x9A,0x3C,0xFF) },
-    { {4.7f, 0.35f, 1.6f}, {0.35f, 0.7f, 0.35f},     C2D_Color32(0x90,0x90,0x90,0xFF) },
-    { {5.4f, 3.0f, -0.6f}, {0.1f, 0.32f, 0.32f},     C2D_Color32(0xE8,0x6A,0x1F,0xFF) },
-    { {5.0f, 0.28f, -1.6f}, {0.28f, 0.28f, 0.28f},   C2D_Color32(0xE8,0x7A,0x2C,0xFF) },
+    { {-4.6f, 0.35f, 2.8f}, {0.35f, 0.55f, 0.35f},   0xFF2A4A7A },
+    { {-4.6f, 1.15f, 2.8f}, {0.7f, 0.85f, 0.7f},     0xFF3C9A4E },
+    { {4.7f, 0.35f, 1.6f}, {0.35f, 0.7f, 0.35f},     0xFF909090 },
+    { {5.4f, 3.0f, -0.6f}, {0.1f, 0.32f, 0.32f},     0xFF1F6AE8 },
+    { {5.0f, 0.28f, -1.6f}, {0.28f, 0.28f, 0.28f},   0xFF2C7AE8 },
 };
 
 // add a real Rec Room glove model (hand_model.h) at hand position/orientation.
