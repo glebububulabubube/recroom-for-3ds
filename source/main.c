@@ -53,6 +53,7 @@ typedef struct {
 typedef struct {
     Vec3 world;
     int  grabIdx;   // box index it holds, -1 = empty
+    float roll;     // rotation around view axis: idle hands rest sideways
 } Hand;
 
 typedef struct {
@@ -266,8 +267,9 @@ static void addRoomModelFaces(void)
 
 // add a real Rec Room glove model (hand_model.h) at hand position/orientation.
 // handPart: 0 = right glove (as authored), 1 = left glove (mirrored on X).
-// The glove is oriented by the camera basis so it tracks the player's view.
-static void addHandFaces(const Box* h, int handPart)
+// roll: rotation around the view axis (idle hands lie sideways, palm in).
+// When the hand is used (L/R held) roll animates to 0 = palm away from camera.
+static void addHandFaces(const Box* h, int handPart, float roll)
 {
     const HM_Part* part = &HM_PARTS[handPart];
     const float S = 0.45f; // glove is ~1m tall in the GLB; shrink to hand size
@@ -279,6 +281,11 @@ static void addHandFaces(const Box* h, int handPart)
     float U[3] = { sY*sP, -cP, cY*sP };
     float F[3] = { sY*cP, sP, cY*cP };
 
+    float cr = cosf(roll), sr = sinf(roll);
+    // rotated side axes: Rr = R*cr + U*sr, Ur = -R*sr + U*cr
+    float Rr[3] = { R[0]*cr + U[0]*sr, R[1]*cr + U[1]*sr, R[2]*cr + U[2]*sr };
+    float Ur[3] = { -R[0]*sr + U[0]*cr, -R[1]*sr + U[1]*cr, -R[2]*sr + U[2]*cr };
+
     int i;
     for(i = 0; i < part->faceCount * 9; i += 9){
         Vec3 v[3];
@@ -287,10 +294,10 @@ static void addHandFaces(const Box* h, int handPart)
             float lx = part->data[i + vi*3 + 0] * S;
             float ly = part->data[i + vi*3 + 1] * S;
             float lz = part->data[i + vi*3 + 2] * S;
-            // local model axes -> camera axes: x->R, y->U, z->F
-            v[vi].x = lx*R[0] + ly*U[0] + lz*F[0] + h->pos.x;
-            v[vi].y = lx*R[1] + ly*U[1] + lz*F[1] + h->pos.y;
-            v[vi].z = lx*R[2] + ly*U[2] + lz*F[2] + h->pos.z;
+            // local model axes -> camera axes: x->Rr, y->Ur, z->F
+            v[vi].x = lx*Rr[0] + ly*Ur[0] + lz*F[0] + h->pos.x;
+            v[vi].y = lx*Rr[1] + ly*Ur[1] + lz*F[1] + h->pos.y;
+            v[vi].z = lx*Rr[2] + ly*Ur[2] + lz*F[2] + h->pos.z;
         }
         // left hand (part 1) is mirrored on X, which flips the winding
         addTriFaceCull(v, col, true, handPart == 1);
@@ -314,9 +321,9 @@ static void buildWorldFaces(void)
         h.color = C2D_Color32(0xFF,0xFF,0xFF,0xFF);
         h.size.x=0.12f; h.size.y=0.12f; h.size.z=0.12f;
         h.pos = handL.world;
-        addHandFaces(&h, 1); // left hand mirrored part
+        addHandFaces(&h, 1, handL.roll); // left hand mirrored part
         h.pos = handR.world;
-        addHandFaces(&h, 0); // right hand as-is
+        addHandFaces(&h, 0, handR.roll); // right hand as-is
     }
 
     buildBotFaces(); // avatar triangles join the depth-sorted queue
@@ -511,32 +518,39 @@ static void updateHands(void)
     float px = cam.pos.x, py = cam.pos.y, pz = cam.pos.z;
 
     float txL, tyL, tzL, txR, tyR, tzR;
+    float rollL, rollR;
 
     if(held & KEY_L){
-        // left hand follows stick (reaches forward)
+        // left hand follows stick (reaches forward, palm away from camera)
         txL = px + R[0]*(dx*1.0f) + F[0]*1.4f + U[0]*(-dy*0.7f);
         tyL = py + R[1]*(dx*1.0f) + F[1]*1.4f + U[1]*(-dy*0.7f);
         tzL = pz + R[2]*(dx*1.0f) + F[2]*1.4f + U[2]*(-dy*0.7f);
+        rollL = 0.0f;
     } else {
-        // rest position: low left
-        txL = px + R[0]*(-0.35f) + F[0]*1.1f + U[0]*0.45f;
-        tyL = py + R[1]*(-0.35f) + F[1]*1.1f + U[1]*0.45f;
-        tzL = pz + R[2]*(-0.35f) + F[2]*1.1f + U[2]*0.45f;
+        // idle: hang low-left, turned sideways (palm in); visible when you look down
+        txL = px + R[0]*(-0.38f) + F[0]*0.55f + U[0]*1.05f;
+        tyL = py + R[1]*(-0.38f) + F[1]*0.55f + U[1]*1.05f;
+        tzL = pz + R[2]*(-0.38f) + F[2]*0.55f + U[2]*1.05f;
+        rollL = 1.5708f; // turn sideways, palm facing in
     }
 
     if(held & KEY_R){
         txR = px + R[0]*(dx*1.0f) + F[0]*1.4f + U[0]*(-dy*0.7f);
         tyR = py + R[1]*(dx*1.0f) + F[1]*1.4f + U[1]*(-dy*0.7f);
         tzR = pz + R[2]*(dx*1.0f) + F[2]*1.4f + U[2]*(-dy*0.7f);
+        rollR = 0.0f;
     } else {
-        // rest position: low right
-        txR = px + R[0]*(0.35f) + F[0]*1.1f + U[0]*0.45f;
-        tyR = py + R[1]*(0.35f) + F[1]*1.1f + U[1]*0.45f;
-        tzR = pz + R[2]*(0.35f) + F[2]*1.1f + U[2]*0.45f;
+        // idle: hang low-right, turned sideways
+        txR = px + R[0]*(0.38f) + F[0]*0.55f + U[0]*1.05f;
+        tyR = py + R[1]*(0.38f) + F[1]*0.55f + U[1]*1.05f;
+        tzR = pz + R[2]*(0.38f) + F[2]*0.55f + U[2]*1.05f;
+        rollR = -1.5708f; // turn sideways, palm facing in
     }
 
     moveHandTo(&handL, txL, tyL, tzL);
     moveHandTo(&handR, txR, tyR, tzR);
+    handL.roll += (rollL - handL.roll) * 0.25f;
+    handR.roll += (rollR - handR.roll) * 0.25f;
     syncHandWithBox(&handL);
     syncHandWithBox(&handR);
 }
@@ -648,6 +662,8 @@ static void initWorld(void)
     handR.world.x =  0.35f; handR.world.y = 1.0f;  handR.world.z = 1.1f;
     handL.grabIdx = -1;
     handR.grabIdx = -1;
+    handL.roll = 1.5708f;   // start idle: sideways, low
+    handR.roll = -1.5708f;
     grabbedBox = -1;
 
     cam.pos.x = 0.0f; cam.pos.y = 1.3f; cam.pos.z = 0.0f;
