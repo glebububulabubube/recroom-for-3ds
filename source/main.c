@@ -87,10 +87,11 @@ static void musicStopAll(void)
 
 // ---------------- end music ----------------
 
-// ---------------- menu images (swizzled RGBA8 512x256 via bin2o) ----------------
-// The menu background art is stored as 512x256 RGBA8 already swizzled into the
-// PICA200 tile order (8x8 tiles, permutations exactly like tex3ds swizzle.cpp)
-// by menu_tex.py, so a plain memcpy via C3D_TexUpload shows it correctly.
+// ---------------- menu images (swizzled "RGBA8" 512x256 via bin2o) ----------------
+// The menu background art is stored as 512x256 GPU_RGBA8 data already swizzled
+// (8x8 tiles + permutations, exactly like tex3ds swizzle.cpp) AND in the
+// PICA200 channel order A,B,G,R per pixel (tex3ds encode.cpp rgba8888), so a
+// plain memcpy via C3D_TexUpload shows it correctly.
 // Top art occupies 400x240, bottom 320x240.
 #define MENU_TEX_W 512
 #define MENU_TEX_H 256
