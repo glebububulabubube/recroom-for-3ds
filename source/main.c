@@ -148,14 +148,6 @@ static void menuImagesInit(void)
     menuTexReady = true;
 }
 
-static void menuImagesFree(void)
-{
-    if(!menuTexReady) return;
-    C3D_TexDelete(&menuTex[0]);
-    C3D_TexDelete(&menuTex[1]);
-    menuTexReady = false;
-}
-
 // draw the art stretched over the whole target; which: 0=top, 1=bottom
 static void drawMenuImage(int which, int targetW, int targetH)
 {
@@ -216,6 +208,8 @@ typedef struct {
     float vy;       // vertical velocity (jump physics)
     bool grounded;  // standing on the floor
 } Camera;
+
+static Camera cam;   // player camera (declared here: used by isNearMirror below)
 
 // ---- maker pen + air drawing (strokes stay in the world) ----
 #define MAX_STROKE 600
@@ -374,7 +368,6 @@ static const Prop* placeProps(int map, int* outCount)
 }
 
 static Hand handL, handR;
-static Camera cam;
 
 // last spoken bot line shown on the bottom screen
 static char botMsg[96] = "";
