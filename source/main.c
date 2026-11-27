@@ -8,6 +8,13 @@
 
 #include <citro2d.h>
 
+// forward declarations (functions defined later in this file are called
+// earlier; without these the ARM compiler reports implicit declarations)
+static float mapFloorY(void);
+static float mapEyeY(void);
+static void loadCustom(void);
+static void saveCustom(void);
+
 #include "player_model.h"
 #include "hand_model.h"
 #include "pen_model.h"
@@ -263,20 +270,17 @@ static bool isNearMirror(void)
 #define CUST_COLORS 6
 static int custSel = 0;                       // slot being edited: 0 skin, 1 shirt, 2 hair
 static int custIdx[CUST_SLOTS] = {0, 0, 0};   // color index per slot
+// palettes for the avatar customize menu. Direct 0xRRGGBBAA values:
+// C2D_Color32() is a macro, not a compile-time constant, so static arrays
+// cannot use it.
 static const u32 SKIN_COLORS[CUST_COLORS] = {
-    C2D_Color32(0xFF,0xD9,0xB3,0xFF), C2D_Color32(0xF1,0xC2,0x7D,0xFF),
-    C2D_Color32(0xDD,0xA0,0x6B,0xFF), C2D_Color32(0xC6,0x86,0x42,0xFF),
-    C2D_Color32(0x8D,0x55,0x24,0xFF), C2D_Color32(0x6B,0x42,0x26,0xFF),
+    0xFFD9B3FF, 0xF1C27DFF, 0xDDA06BFF, 0xC68642FF, 0x8D5524FF, 0x6B4226FF,
 };
 static const u32 SHIRT_COLORS[CUST_COLORS] = {
-    C2D_Color32(0xBA,0x75,0x34,0xFF), C2D_Color32(0x2E,0x86,0xC1,0xFF),
-    C2D_Color32(0x3F,0xA9,0x46,0xFF), C2D_Color32(0xC9,0x3A,0x37,0xFF),
-    C2D_Color32(0x7E,0x57,0xC2,0xFF), C2D_Color32(0xF2,0xC1,0x4A,0xFF),
+    0xBA7534FF, 0x2E86C1FF, 0x3FA946FF, 0xC93A37FF, 0x7E57C2FF, 0xF2C14AFF,
 };
 static const u32 HAIR_COLORS[CUST_COLORS] = {
-    C2D_Color32(0x19,0x0D,0x05,0xFF), C2D_Color32(0x3B,0x22,0x10,0xFF),
-    C2D_Color32(0x7A,0x3B,0x1E,0xFF), C2D_Color32(0xB9,0x6A,0x2E,0xFF),
-    C2D_Color32(0xE0,0xC9,0x9C,0xFF), C2D_Color32(0x8E,0x9B,0xB8,0xFF),
+    0x190D05FF, 0x3B2210FF, 0x7A3B1EFF, 0xB96A2EFF, 0xE0C99CFF, 0x8E9BB8FF,
 };
 #define CUSTOM_FILE "sdmc:/recroom3ds_custom.txt"
 static int  placeSel = 0;
@@ -1085,9 +1089,6 @@ static void updateHands(void)
     handR.roll += (rollR - handR.roll) * 0.25f;
 }
 
-static float mapFloorY(void);   // fwd: used by teleportToPlace below
-static float mapEyeY(void);
-
 // teleport to a place from any other; keeps the player on the floor
 static void teleportToPlace(int place, int fromPlace)
 {
@@ -1426,15 +1427,6 @@ static void saveCustom(void)
     if(f){
         fprintf(f, "%d %d %d", custIdx[0], custIdx[1], custIdx[2]);
         fclose(f);
-    }
-}
-
-static u32 customSlotColor(int slot)
-{
-    switch(slot){
-        case 0: return SKIN_COLORS[custIdx[0]];
-        case 1: return SHIRT_COLORS[custIdx[1]];
-        default: return HAIR_COLORS[custIdx[2]];
     }
 }
 
