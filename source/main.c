@@ -351,7 +351,7 @@ typedef struct {
     bool tri; // true: only 3 verts (x0..x2), no 4th vertex
 } Face;
 
-#define MAX_FACES 9000
+#define MAX_FACES 10000
 static Face faces[MAX_FACES];
 static int faceCount = 0;
 
