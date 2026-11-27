@@ -247,6 +247,38 @@ static const char* const PLACE_NAMES[PLACE_COUNT] = {
     "DORM ROOM", "REC CENTER", "CHILL ZONE", "DUDES ZONE", "PLAY ROOM", "REC ROOM MEMORIAL"
 };
 static bool placesOpen = false; // places menu on the bottom screen
+static bool customizeOpen = false; // avatar customize menu (mirror in the dorm)
+static float custAnim = 0.0f;   // rotating angle of the avatar in the customize menu
+
+// mirror in the dorm room wall: x[-2.0..0.4], z~2.66 (legacy_Mirror_Dorm_Mat)
+static bool isNearMirror(void)
+{
+    return (currentMap == 0 && cam.pos.z > 1.8f &&
+            cam.pos.x > -2.6f && cam.pos.x < 1.0f);
+}
+
+// ---------------- avatar customization ----------------
+// avatar parts: 0=hair, 1=shirt, 2=face decal, 3=skin (see player_model.h)
+#define CUST_SLOTS 3
+#define CUST_COLORS 6
+static int custSel = 0;                       // slot being edited: 0 skin, 1 shirt, 2 hair
+static int custIdx[CUST_SLOTS] = {0, 0, 0};   // color index per slot
+static const u32 SKIN_COLORS[CUST_COLORS] = {
+    C2D_Color32(0xFF,0xD9,0xB3,0xFF), C2D_Color32(0xF1,0xC2,0x7D,0xFF),
+    C2D_Color32(0xDD,0xA0,0x6B,0xFF), C2D_Color32(0xC6,0x86,0x42,0xFF),
+    C2D_Color32(0x8D,0x55,0x24,0xFF), C2D_Color32(0x6B,0x42,0x26,0xFF),
+};
+static const u32 SHIRT_COLORS[CUST_COLORS] = {
+    C2D_Color32(0xBA,0x75,0x34,0xFF), C2D_Color32(0x2E,0x86,0xC1,0xFF),
+    C2D_Color32(0x3F,0xA9,0x46,0xFF), C2D_Color32(0xC9,0x3A,0x37,0xFF),
+    C2D_Color32(0x7E,0x57,0xC2,0xFF), C2D_Color32(0xF2,0xC1,0x4A,0xFF),
+};
+static const u32 HAIR_COLORS[CUST_COLORS] = {
+    C2D_Color32(0x19,0x0D,0x05,0xFF), C2D_Color32(0x3B,0x22,0x10,0xFF),
+    C2D_Color32(0x7A,0x3B,0x1E,0xFF), C2D_Color32(0xB9,0x6A,0x2E,0xFF),
+    C2D_Color32(0xE0,0xC9,0x9C,0xFF), C2D_Color32(0x8E,0x9B,0xB8,0xFF),
+};
+#define CUSTOM_FILE "sdmc:/recroom3ds_custom.txt"
 static int  placeSel = 0;
 
 // prop = one solid/decor element on a procedural place
@@ -414,6 +446,26 @@ static void addFace(const Vec3* v, u32 color, float brightness)
         (u8)((color >> 16) & 0xFF) * brightness,
         0xFF);
     f->tri = (v[3].x == v[2].x && v[3].y == v[2].y && v[3].z == v[2].z);
+}
+
+// soft blob shadow: same as addFace but keeps the alpha channel so the shadow
+// blends over the floor (addFace bakes alpha to 0xFF)
+static void addShadowQuad(const Vec3* v, u32 color)
+{
+    if(faceCount >= MAX_FACES) return;
+    float x0,y0,x1,y1,x2,y2,x3,y3;
+    float d0,d1,d2,d3;
+    if(!project(v[0].x, v[0].y, v[0].z, &x0,&y0,&d0)) return;
+    if(!project(v[1].x, v[1].y, v[1].z, &x1,&y1,&d1)) return;
+    if(!project(v[2].x, v[2].y, v[2].z, &x2,&y2,&d2)) return;
+    if(!project(v[3].x, v[3].y, v[3].z, &x3,&y3,&d3)) return;
+
+    Face* f = &faces[faceCount++];
+    f->depth   = (d0+d1+d2+d3)*0.25f;
+    f->x0=x0; f->y0=y0; f->x1=x1; f->y1=y1;
+    f->x2=x2; f->y2=y2; f->x3=x3; f->y3=y3;
+    f->color = color;
+    f->tri = false;
 }
 
 // add a single triangle (used by glb models) - one draw call, not two.
@@ -688,6 +740,16 @@ static void buildWorldFaces(void)
         }
     }
 
+    // soft blob shadow under the player (blends over the floor)
+    float sy = mapFloorY() + 0.02f;   // just above the floor, under the feet
+    Vec3 sh[4] = {
+        { cam.pos.x-0.35f, sy, cam.pos.z-0.35f },
+        { cam.pos.x+0.35f, sy, cam.pos.z-0.35f },
+        { cam.pos.x+0.35f, sy, cam.pos.z+0.35f },
+        { cam.pos.x-0.35f, sy, cam.pos.z+0.35f }
+    };
+    addShadowQuad(sh, C2D_Color32(0x00,0x00,0x00,0x55));
+
     // air-drawn stroke lives in the world; draw it every frame
     addStrokeFaces();
 
@@ -868,7 +930,12 @@ static void drawBot(const Bot* b)
     int pn;
     for(pn = 0; pn < PM_PART_COUNT; pn++){
         const PM_Part* part = &PM_PARTS[pn];
-        u32 col = C2D_Color32((u8)(part->r*255.0f), (u8)(part->g*255.0f), (u8)(part->b*255.0f), 0xFF);
+        u32 col;
+        // custom colors: 0=hair, 1=shirt, 2=face, 3=skin (see player_model.h)
+        if(pn == 0)      col = HAIR_COLORS[custIdx[2]];
+        else if(pn == 1) col = SHIRT_COLORS[custIdx[1]];
+        else if(pn == 3) col = SKIN_COLORS[custIdx[0]];
+        else             col = C2D_Color32((u8)(part->r*255.0f), (u8)(part->g*255.0f), (u8)(part->b*255.0f), 0xFF);
         int i;
         for(i = 0; i < part->faceCount * 9; i += 9){
             Vec3 v[3];
@@ -893,12 +960,58 @@ static void drawBot(const Bot* b)
     addFaceFeature( 0.000f, 1.46f, 0.030f, 0.008f, fz, b, ca, sa); // smile
 }
 
+// live avatar shown in the customize menu: fixed 2D pose in the centre of the
+// top screen, slowly rotating, with the player's chosen colors. Parts are drawn
+// back-to-front (skin -> shirt -> face -> hair) so overlap stays correct.
+static void drawCustomAvatar(float angle)
+{
+    float ca = cosf(angle), sa = sinf(angle);
+    // draw order: skin(3), shirt(1), face(2), hair(0)
+    int order[4] = { 3, 1, 2, 0 };
+    int oi;
+    for(oi = 0; oi < 4; oi++){
+        int pn = order[oi];
+        const PM_Part* part = &PM_PARTS[pn];
+        u32 col;
+        if(pn == 0)      col = HAIR_COLORS[custIdx[2]];
+        else if(pn == 1) col = SHIRT_COLORS[custIdx[1]];
+        else if(pn == 3) col = SKIN_COLORS[custIdx[0]];
+        else             col = C2D_Color32((u8)(part->r*255.0f), (u8)(part->g*255.0f), (u8)(part->b*255.0f), 0xFF);
+        int i;
+        for(i = 0; i < part->faceCount * 9; i += 9){
+            float tx[3], ty[3];
+            int vi;
+            for(vi = 0; vi < 3; vi++){
+                float lx = part->data[i + vi*3 + 0];
+                float ly = part->data[i + vi*3 + 1];
+                float lz = part->data[i + vi*3 + 2];
+                float rx = lx*ca - lz*sa;
+                float rz = lx*sa + lz*ca;
+                tx[vi] = 200.0f + rx*125.0f;   // fixed screen centre, scale up
+                ty[vi] = 212.0f - ly*105.0f;
+                (void)rz;
+            }
+            C2D_DrawTriangle(tx[0], ty[0], col, tx[1], ty[1], col, tx[2], ty[2], col, 0.5f);
+        }
+    }
+}
+
 static void buildBotFaces(void)
 {
     int i;
     for(i = 0; i < MAX_BOTS; i++)
-        if(bots[i].map == currentMap) // only bots of the current place
+        if(bots[i].map == currentMap){ // only bots of the current place
+            // blob shadow on the floor under the bot (feet at b->pos.y)
+            float sy = mapFloorY() + 0.02f;
+            Vec3 sh[4] = {
+                { bots[i].pos.x-0.30f, sy, bots[i].pos.z-0.30f },
+                { bots[i].pos.x+0.30f, sy, bots[i].pos.z-0.30f },
+                { bots[i].pos.x+0.30f, sy, bots[i].pos.z+0.30f },
+                { bots[i].pos.x-0.30f, sy, bots[i].pos.z+0.30f }
+            };
+            addShadowQuad(sh, C2D_Color32(0x00,0x00,0x00,0x40));
             drawBot(&bots[i]);
+        }
 }
 
 static void updateHands(void)
@@ -1159,19 +1272,46 @@ static void updatePlayer(float dt)
                 } else {
                     placesOpen = false;
                 }
-            } else {
-                // PEN button: toggle the Maker Pen (bottom screen, center-right)
-                float tdx = touch.px - 200.0f, tdy = touch.py - 198.0f;
-                if(tdx*tdx + tdy*tdy < 32.0f*32.0f){
-                    penHeld = !penHeld;
-                    if(!penHeld) stroke.count = 0; // put the pen away: clear the line
+                return; // places menu consumes this tap
+            }
+            if(customizeOpen){
+                // customize menu: tap a color swatch to pick it (rows are
+                // SKIN/SHIRT/HAIR at y=74+s*30, swatches at x=240+c*9);
+                // tapping outside the swatch area closes the menu
+                float ty = touch.py;
+                float tx = touch.px;
+                int slot = (int)((ty - 74.0f) / 30.0f);
+                if(slot < 0 || slot >= CUST_SLOTS){ customizeOpen = false; return; }
+                if(tx < 234.0f || tx > 300.0f){ customizeOpen = false; return; }
+                int colIdx = (int)((tx - 240.0f) / 9.0f);
+                if(colIdx < 0 || colIdx >= CUST_COLORS){ customizeOpen = false; return; }
+                custIdx[slot] = colIdx;
+                saveCustom();
+                return; // customize menu consumes this tap
+            }
+            // CUSTOMIZE button: appears near the dorm mirror; takes priority
+            // over PLACES/PEN so a tap near the mirror toggles the menu
+            if(isNearMirror()){
+                float cdx = touch.px - 60.0f, cdy = touch.py - 62.0f;
+                if(cdx*cdx + cdy*cdy < 30.0f*30.0f){
+                    customizeOpen = !customizeOpen;
+                    if(!customizeOpen){ penHeld = false; stroke.count = 0; }
+                    return;
                 }
-                // PLACES button: open the place list (bottom screen, left)
-                float pdx = touch.px - 130.0f, pdy = touch.py - 198.0f;
-                if(pdx*pdx + pdy*pdy < 32.0f*32.0f){
-                    placesOpen = true;
-                    placeSel = currentMap;
-                }
+            }
+            // PEN button: toggle the Maker Pen (bottom screen, center-right)
+            float tdx = touch.px - 200.0f, tdy = touch.py - 198.0f;
+            if(tdx*tdx + tdy*tdy < 32.0f*32.0f){
+                penHeld = !penHeld;
+                if(!penHeld) stroke.count = 0; // put the pen away: clear the line
+                return;
+            }
+            // PLACES button: open the place list (bottom screen, left)
+            float pdx = touch.px - 130.0f, pdy = touch.py - 198.0f;
+            if(pdx*pdx + pdy*pdy < 32.0f*32.0f){
+                placesOpen = true;
+                placeSel = currentMap;
+                return;
             }
         }
         // jump: touch the JUMP button (only when the places menu is closed)
@@ -1264,6 +1404,39 @@ static void initWorld(void)
 }
 
 // ---------------- menu (citro2d) ----------------
+
+// avatar skin/shirt/hair colors: persisted so they survive a reboot
+static void loadCustom(void)
+{
+    FILE* f = fopen(CUSTOM_FILE, "r");
+    if(f){
+        int s0 = -1, s1 = -1, s2 = -1;
+        if(fscanf(f, "%d %d %d", &s0, &s1, &s2) == 3){
+            if(s0 >= 0 && s0 < CUST_COLORS) custIdx[0] = s0;
+            if(s1 >= 0 && s1 < CUST_COLORS) custIdx[1] = s1;
+            if(s2 >= 0 && s2 < CUST_COLORS) custIdx[2] = s2;
+        }
+        fclose(f);
+    }
+}
+
+static void saveCustom(void)
+{
+    FILE* f = fopen(CUSTOM_FILE, "w");
+    if(f){
+        fprintf(f, "%d %d %d", custIdx[0], custIdx[1], custIdx[2]);
+        fclose(f);
+    }
+}
+
+static u32 customSlotColor(int slot)
+{
+    switch(slot){
+        case 0: return SKIN_COLORS[custIdx[0]];
+        case 1: return SHIRT_COLORS[custIdx[1]];
+        default: return HAIR_COLORS[custIdx[2]];
+    }
+}
 
 static void loadName(void)
 {
@@ -1393,6 +1566,11 @@ static void drawGameHud(C3D_RenderTarget* bottom)
     // JUMP button (bottom screen, where the right thumb naturally rests)
     C2D_DrawCircleSolid(270.0f, 198.0f, 0.5f, 32.0f, clrWhite);
     drawText("JUMP", 270.0f, 189.0f, 0.8f, clrOrange, true);
+    // CUSTOMIZE button: only near the dorm mirror (bottom screen, left)
+    if(isNearMirror()){
+        C2D_DrawCircleSolid(60.0f, 62.0f, 0.5f, 30.0f, customizeOpen ? clrOrange : clrWhite);
+        drawText("CUSTOMIZE", 60.0f, 54.0f, 0.7f, customizeOpen ? clrWhite : clrOrange, true);
+    }
     {
         char dbg[64];
         snprintf(dbg, sizeof(dbg), "v13 %s  yaw:%d pitch:%d",
@@ -1419,6 +1597,30 @@ static void drawGameHud(C3D_RenderTarget* bottom)
         }
         drawText("Tap a place to travel", 160.0f, 226.0f, 0.7f, clrWhite, true);
     }
+
+    // customize menu overlay (mirror in the dorm room)
+    if(customizeOpen){
+        C2D_DrawRectSolid(20.0f, 34.0f, 0.5f, 280.0f, 30.0f, clrWhite);
+        drawText("CUSTOMIZE", 160.0f, 38.0f, 1.0f, clrOrange, true);
+        static const char* slotNames[CUST_SLOTS] = { "SKIN", "SHIRT", "HAIR" };
+        int s;
+        for(s = 0; s < CUST_SLOTS; s++){
+            float y = 74.0f + s * 30.0f;
+            if(s == custSel)
+                C2D_DrawRectSolid(30.0f, y, 0.5f, 200.0f, 26.0f, clrOrange);
+            drawText(slotNames[s], 120.0f, y + 6.0f, 0.9f, s == custSel ? clrWhite : clrWhite, false);
+            // color swatches for this slot
+            int c;
+            for(c = 0; c < CUST_COLORS; c++){
+                u32 cc = s == 0 ? SKIN_COLORS[c] : (s == 1 ? SHIRT_COLORS[c] : HAIR_COLORS[c]);
+                float sx = 240.0f + c * 9.0f;
+                C2D_DrawRectSolid(sx, y + 4.0f, 0.5f, 8.0f, 18.0f, cc);
+                if(custIdx[s] == c)
+                    C2D_DrawRectSolid(sx - 1.0f, y + 3.0f, 0.5f, 10.0f, 20.0f, clrWhite);
+            }
+        }
+        drawText("A/B: slot  L/R: color  START: done", 160.0f, 228.0f, 0.6f, clrWhite, true);
+    }
 }
 
 static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
@@ -1430,14 +1632,23 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
         hidScanInput();
         u32 kDown = hidKeysDown();
 
-        if(kDown & KEY_START) break;
-        if(kDown & KEY_SELECT) tryTalk();
-
         updatePlayer(1.0f/60.0f);
         updateHands();
         updateBots(1.0f/60.0f);
         updateCameraBasis();
         buildWorldFaces();
+
+        // customize menu input: slot switching (A/B), color (L/R), close (START)
+        if(customizeOpen){
+            if(kDown & KEY_A)      { custSel = (custSel + 1) % CUST_SLOTS; }
+            if(kDown & KEY_B)      { custSel = (custSel + CUST_SLOTS - 1) % CUST_SLOTS; }
+            if(kDown & KEY_L)      { custIdx[custSel] = (custIdx[custSel] + CUST_COLORS - 1) % CUST_COLORS; saveCustom(); }
+            if(kDown & KEY_R)      { custIdx[custSel] = (custIdx[custSel] + 1) % CUST_COLORS; saveCustom(); }
+            if(kDown & KEY_START){ customizeOpen = false; }
+        } else {
+            if(kDown & KEY_START) break;
+            if(kDown & KEY_SELECT) tryTalk();
+        }
 
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         C2D_SceneBegin(top);
@@ -1445,6 +1656,20 @@ static void gameLoop(C3D_RenderTarget* top, C3D_RenderTarget* bottom)
         int i;
         for(i = 0; i < faceCount; i++)
             drawFaceQuad(&faces[i]);
+
+        if(customizeOpen){
+            // draw the live avatar, slowly rotating, over the darkened world
+            custAnim += 0.04f;
+            if(custAnim > 6.2832f) custAnim -= 6.2832f;
+            C2D_DrawRectSolid(0.0f, 0.0f, 0.4f, 400.0f, 240.0f, C2D_Color32(0x10,0x10,0x10,0xC0));
+            drawCustomAvatar(custAnim);
+        }
+
+        // vignette: darken the screen edges for a finished look
+        C2D_DrawRectSolid(0.0f, 0.0f, 0.5f, 400.0f, 32.0f,  C2D_Color32(0x00,0x00,0x00,0x60)); // top
+        C2D_DrawRectSolid(0.0f, 208.0f, 0.5f, 400.0f, 32.0f, C2D_Color32(0x00,0x00,0x00,0x60)); // bottom
+        C2D_DrawRectSolid(0.0f, 0.0f, 0.5f, 24.0f, 240.0f,  C2D_Color32(0x00,0x00,0x00,0x60)); // left
+        C2D_DrawRectSolid(376.0f, 0.0f, 0.5f, 24.0f, 240.0f, C2D_Color32(0x00,0x00,0x00,0x60)); // right
 
         drawGameHud(bottom);
         C3D_FrameEnd(0);
@@ -1469,6 +1694,7 @@ int main(void)
     g_textBuf = C2D_TextBufNew(256);
 
     loadName();
+    loadCustom();
     menuImagesInit();
     musicInit();
     musicPlayMenu();
